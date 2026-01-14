@@ -554,10 +554,10 @@ const LinuxCommandQuiz: React.FC = () => {
   const checkAnswer = () => {
     const userCmd = userAnswer.trim();
     const correctCmd = currentQ.answer;
-    
-    const isCorrect = userCmd === correctCmd || 
+
+    const isCorrect = userCmd === correctCmd ||
                       userCmd.replace(/\s+/g, ' ') === correctCmd.replace(/\s+/g, ' ');
-    
+
     setResult(isCorrect);
     setScore(prev => ({
       correct: prev.correct + (isCorrect ? 1 : 0),
@@ -639,7 +639,7 @@ const LinuxCommandQuiz: React.FC = () => {
               <span className="text-sm text-gray-400">{currentQ.title}</span>
             </div>
             <p className="text-yellow-300 mb-3">{currentQ.task}</p>
-            
+
             <div className="bg-black rounded p-3 mb-3 font-mono text-sm overflow-x-auto">
               <div className="text-gray-400 mb-1"># ファイル: {currentQ.file}</div>
               <pre className="text-green-300 whitespace-pre">{currentQ.data}</pre>
