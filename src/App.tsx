@@ -801,8 +801,23 @@ const LinuxCommandQuiz: React.FC = () => {
     // パイプ形式と引数形式の両方を許可
     let isCorrect = false;
 
-    // 1. 完全一致
-    if (normalizedUser === normalizedCorrect) {
+    const hasIgnoreCaseOption = normalizedCorrect.includes('-i') || normalizedUser.includes('-i');
+
+    const compareCommands = (cmd1: string, cmd2: string): boolean => {
+      if (hasIgnoreCaseOption) {
+        // -i オプションがある場合の処理
+        const normalize = (cmd: string) => {
+          return cmd.replace(/(-i\s+)(\S+)/, (match, flag, pattern) => {
+            return flag + pattern.toLowerCase();
+          }).toLowerCase();
+      };
+      return normalize(cmd1) === normalize(cmd2);
+      }
+      return cmd1 === cmd2;
+    };
+
+    // 1. 完全一致（-iオプション考慮）
+    if (compareCommands(normalizedUser, normalizedCorrect)) {
       isCorrect = true;
     }
 
@@ -810,13 +825,15 @@ const LinuxCommandQuiz: React.FC = () => {
     const pipePattern = new RegExp(`cat\\s+${fileName}\\s*\\|\\s*(.+)`);
     const pipeMatch = normalizedUser.match(pipePattern);
 
-    if (pipeMatch) {
+    if (pipeMatch && !isCorrect) {
       // パイプ形式が入力された場合、コマンド部分だけ比較
       const commandPart = pipeMatch[1].trim();
-      if (commandPart === normalizedCorrect) {
+      if (compareCommands(commandPart, normalizedCorrect)) {
         isCorrect = true;
       }
-    } else {
+    }
+
+    if (!isCorrect) {
       // 引数形式が入力された場合
       // 正解がパイプなしの場合、ファイル名を引数に取る形式も正解とする
       const argPattern = new RegExp(`(.+?)\\s+${fileName}`);
@@ -824,7 +841,7 @@ const LinuxCommandQuiz: React.FC = () => {
 
       if (argMatch) {
         const commandPart = argMatch[1].trim();
-        if (commandPart === normalizedCorrect) {
+        if (compareCommands(commandPart, normalizedCorrect)) {
           isCorrect = true;
         }
       }
