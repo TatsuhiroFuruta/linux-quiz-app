@@ -34,6 +34,7 @@ const LinuxCommandQuiz: React.FC = () => {
   const [result, setResult] = useState<boolean | null>(null);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [score, setScore] = useState<Score>({ correct: 0, total: 0 });
+  const [commandOutput, setCommandOutput] = useState<string>('');
 
   const questions: Questions = {
     grep: {
@@ -551,12 +552,287 @@ const LinuxCommandQuiz: React.FC = () => {
   const currentQuestions = questions[commandType][level];
   const currentQ = currentQuestions[currentQuestion];
 
+  // コマンド実行のシミュレーション
+  const simulateCommand = (command: string, data: string): string => {
+    const lines = data.split('\n');
+
+    try {
+      // grepのシミュレーション
+      if (command.includes('grep')) {
+        const grepMatch = command.match(/grep\s+(.+)/);
+        if (!grepMatch) return '';
+
+        const args = grepMatch[1].trim();
+
+        // -v オプション（否定）
+        if (args.startsWith('-v ')) {
+          const pattern = args.substring(3).trim();
+          return lines.filter(line => !line.includes(pattern)).join('\n');
+        }
+
+        // -i オプション（大文字小文字無視）
+        if (args.startsWith('-i ')) {
+          const pattern = args.substring(3).trim().toLowerCase();
+          return lines.filter(line => line.toLowerCase().includes(pattern)).join('\n');
+        }
+
+        // -c オプション（カウント）
+        if (args.startsWith('-c ')) {
+          const pattern = args.substring(3).trim();
+          return lines.filter(line => line.includes(pattern)).length.toString();
+        }
+
+        // -n オプション（行番号）
+        if (args.startsWith('-n ')) {
+          const pattern = args.substring(3).trim();
+          return lines
+            .map((line, idx) => (line.includes(pattern) ? `${idx + 1}:${line}` : null))
+            .filter(Boolean)
+            .join('\n');
+        }
+
+        // -w オプション（単語境界）
+        if (args.startsWith('-w ')) {
+          const pattern = args.substring(3).trim();
+          const regex = new RegExp(`\\b${pattern}\\b`);
+          return lines.filter(line => regex.test(line)).join('\n');
+        }
+
+        // -E オプション（拡張正規表現）
+        if (args.startsWith('-E ')) {
+          const pattern = args.substring(3).replace(/"/g, '').trim();
+          const regex = new RegExp(pattern);
+          return lines.filter(line => regex.test(line)).join('\n');
+        }
+
+        // -C オプション（前後の行）
+        if (args.match(/-C\s+(\d+)\s+(.+)/)) {
+          const match = args.match(/-C\s+(\d+)\s+(.+)/);
+          if (match) {
+            const context = parseInt(match[1]);
+            const pattern = match[2].trim();
+            const result: string[] = [];
+            lines.forEach((line, idx) => {
+              if (line.includes(pattern)) {
+                for (let i = Math.max(0, idx - context); i <= Math.min(lines.length - 1, idx + context); i++) {
+                  if (!result.includes(lines[i])) result.push(lines[i]);
+                }
+              }
+            });
+            return result.join('\n');
+          }
+        }
+
+        // 正規表現パターン
+        if (args.startsWith('^')) {
+          const pattern = args.substring(1);
+          return lines.filter(line => line.startsWith(pattern)).join('\n');
+        }
+
+        if (args.includes('$')) {
+          const pattern = args.replace(/\\\./g, '.').replace('$', '');
+          return lines.filter(line => line.endsWith(pattern)).join('\n');
+        }
+
+        // 通常のgrep
+        return lines.filter(line => line.includes(args.trim())).join('\n');
+      }
+
+      // sedのシミュレーション
+      if (command.includes('sed')) {
+        let result = lines.slice();
+
+        // 行削除
+        if (command.match(/sed\s+(\d+)d/)) {
+          const lineNum = parseInt(command.match(/sed\s+(\d+)d/)![1]);
+          result.splice(lineNum - 1, 1);
+          return result.join('\n');
+        }
+
+        // 範囲削除
+        if (command.match(/sed\s+(\d+),(\d+)d/)) {
+          const match = command.match(/sed\s+(\d+),(\d+)d/)!;
+          const start = parseInt(match[1]);
+          const end = parseInt(match[2]);
+          result.splice(start - 1, end - start + 1);
+          return result.join('\n');
+        }
+
+        // 空行削除
+        if (command.includes('/^$/d')) {
+          return result.filter(line => line.trim() !== '').join('\n');
+        }
+
+        // パターン削除
+        if (command.match(/sed\s+\/(.+)\/d/)) {
+          const pattern = command.match(/sed\s+\/(.+)\/d/)![1];
+          return result.filter(line => !line.includes(pattern)).join('\n');
+        }
+
+        // 置換
+        if (command.includes('s/')) {
+          const sedMatch = command.match(/sed\s+(.+)/);
+          if (sedMatch) {
+            const sedCmd = sedMatch[1];
+
+            // 複数の-eオプション
+            if (sedCmd.includes('-e')) {
+              const eCommands = sedCmd.match(/-e\s+"([^"]+)"/g);
+              if (eCommands) {
+                eCommands.forEach(eCmd => {
+                  const match = eCmd.match(/-e\s+"s\/(.+?)\/(.+?)\/(g?)"/);
+                  if (match) {
+                    const [, search, replace, global] = match;
+                    const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
+                    result = result.map(line => line.replace(searchRegex, replace));
+                  }
+                });
+                return result.join('\n');
+              }
+            }
+
+            // 通常の置換
+            const match = sedCmd.match(/s\/(.+?)\/(.+?)\/(g?)/);
+            if (match) {
+              const [, search, replace, global] = match;
+              const searchRegex = new RegExp(search, global ? 'g' : '');
+              return result.map(line => line.replace(searchRegex, replace)).join('\n');
+            }
+          }
+        }
+      }
+
+      // awkのシミュレーション
+      if (command.includes('awk')) {
+        // $1の抽出
+        if (command.includes('{print $1}')) {
+          return lines.map(line => line.split(/\s+/)[0]).join('\n');
+        }
+
+        // 計算
+        if (command.includes('$1 * 2')) {
+          return lines.map(line => (parseInt(line.split(/\s+/)[0]) * 2).toString()).join('\n');
+        }
+
+        // 複数列
+        if (command.includes('{print $1, $3}')) {
+          return lines.map(line => {
+            const parts = line.split(/\s+/);
+            return `${parts[0]} ${parts[2]}`;
+          }).join('\n');
+        }
+
+        // NF
+        if (command.includes('{print NF}')) {
+          return lines.map(line => line.split(/\s+/).length.toString()).join('\n');
+        }
+
+        // NR
+        if (command.includes('{print NR, $0}')) {
+          return lines.map((line, idx) => `${idx + 1} ${line}`).join('\n');
+        }
+
+        // $NF
+        if (command.includes('{print $NF}')) {
+          return lines.map(line => {
+            const parts = line.split(/\s+/);
+            return parts[parts.length - 1];
+          }).join('\n');
+        }
+
+        // 条件フィルタ
+        if (command.match(/awk\s+'(.+)'/)) {
+          const awkCmd = command.match(/awk\s+'(.+)'/)![1];
+
+          // $2 >= 30 のような条件
+          if (awkCmd.match(/\$2\s*>=\s*(\d+)/)) {
+            const threshold = parseInt(awkCmd.match(/\$2\s*>=\s*(\d+)/)![1]);
+            return lines.filter(line => {
+              const parts = line.split(/\s+/);
+              return parseInt(parts[1]) >= threshold;
+            }).join('\n');
+          }
+
+          // 計算
+          if (awkCmd.includes('{print $1, $2 * $3}')) {
+            return lines.map(line => {
+              const parts = line.split(/\s+/);
+              return `${parts[0]} ${parseInt(parts[1]) * parseInt(parts[2])}`;
+            }).join('\n');
+          }
+
+          // 合計
+          if (awkCmd.includes('{sum += $1} END {print sum}')) {
+            const sum = lines.reduce((acc, line) => acc + parseInt(line.split(/\s+/)[0]), 0);
+            return sum.toString();
+          }
+
+          // 文字列連結
+          if (awkCmd.includes('lives in')) {
+            return lines.map(line => {
+              const parts = line.split(/\s+/);
+              return `${parts[0]} lives in ${parts[1]}`;
+            }).join('\n');
+          }
+
+          // 行数
+          if (awkCmd.includes('END {print NR}')) {
+            return lines.length.toString();
+          }
+        }
+      }
+      return '(コマンド実行結果)';
+    } catch (e) {
+      console.error('Command simulation error:', e);
+      return '(エラー)';
+    }
+  };
+
+  // 答えのチェック（複数形式対応）
   const checkAnswer = () => {
     const userCmd = userAnswer.trim();
     const correctCmd = currentQ.answer;
+    const fileName = currentQ.file;
 
-    const isCorrect = userCmd === correctCmd ||
-                      userCmd.replace(/\s+/g, ' ') === correctCmd.replace(/\s+/g, ' ');
+    // スペースの正規化
+    const normalizedUser = userCmd.replace(/\s+/g, ' ');
+    const normalizedCorrect = correctCmd.replace(/\s+/g, ' ');
+
+    // パイプ形式と引数形式の両方を許可
+    let isCorrect = false;
+
+    // 1. 完全一致
+    if (normalizedUser === normalizedCorrect) {
+      isCorrect = true;
+    }
+
+    // 2. パイプ形式 (cat file | command) -> 引数形式 (command file) への変換チェック
+    const pipePattern = new RegExp(`cat\\s+${fileName}\\s*\\|\\s*(.+)`);
+    const pipeMatch = normalizedUser.match(pipePattern);
+
+    if (pipeMatch) {
+      // パイプ形式が入力された場合、コマンド部分だけ比較
+      const commandPart = pipeMatch[1].trim();
+      if (commandPart === normalizedCorrect) {
+        isCorrect = true;
+      }
+    } else {
+      // 引数形式が入力された場合
+      // 正解がパイプなしの場合、ファイル名を引数に取る形式も正解とする
+      const argPattern = new RegExp(`(.+?)\\s+${fileName}`);
+      const argMatch = normalizedUser.match(argPattern);
+
+      if (argMatch) {
+        const commandPart = argMatch[1].trim();
+        if (commandPart === normalizedCorrect) {
+          isCorrect = true;
+        }
+      }
+    }
+
+    // コマンドの実行結果を生成
+    const output = simulateCommand(userCmd.includes('|') ? userCmd.split('|')[1].trim() : userCmd, currentQ.data);
+    setCommandOutput(output);
 
     setResult(isCorrect);
     setScore(prev => ({
@@ -571,6 +847,7 @@ const LinuxCommandQuiz: React.FC = () => {
       setUserAnswer('');
       setResult(null);
       setShowHint(false);
+      setCommandOutput('');
     } else {
       alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total + 1}`);
       setCurrentQuestion(0);
@@ -578,6 +855,7 @@ const LinuxCommandQuiz: React.FC = () => {
       setResult(null);
       setShowHint(false);
       setScore({ correct: 0, total: 0 });
+      setCommandOutput('');
     }
   };
 
@@ -587,6 +865,7 @@ const LinuxCommandQuiz: React.FC = () => {
     setResult(null);
     setShowHint(false);
     setScore({ correct: 0, total: 0 });
+    setCommandOutput('');
   };
 
   return (
@@ -655,35 +934,45 @@ const LinuxCommandQuiz: React.FC = () => {
                     value={userAnswer}
                     onChange={(e) => setUserAnswer(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
-                    placeholder={`cat ${currentQ.file} | ${commandType} ...`}
+                    placeholder={`cat ${currentQ.file} | ${commandType} ... または ${commandType} ... ${currentQ.file}`}
                     className="flex-1 bg-transparent outline-none text-green-300"
+                    disabled={result !== null}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={checkAnswer}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition"
-              >
-                実行
-              </button>
-              <button
-                onClick={() => setShowHint(!showHint)}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition flex items-center gap-2"
-              >
-                <Lightbulb className="w-4 h-4" />
-                ヒント
-              </button>
-            </div>
+            {result === null && (
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={checkAnswer}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition"
+                >
+                  実行
+                </button>
+                <button
+                  onClick={() => setShowHint(!showHint)}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition flex items-center gap-2"
+                >
+                  <Lightbulb className="w-4 h-4" />
+                  ヒント
+                </button>
+              </div>
+            )}
 
-            {showHint && (
+            {showHint && result === null && (
               <div className="bg-yellow-900 border border-yellow-600 rounded p-3 mb-3">
                 <div className="flex items-start gap-2">
                   <Lightbulb className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
                   <p className="text-yellow-100">{currentQ.hint}</p>
                 </div>
+              </div>
+            )}
+
+            {commandOutput && (
+              <div className="bg-black rounded p-3 mb-3 font-mono text-sm overflow-x-auto">
+                <div className="text-gray-400 mb-1"># 実行結果:</div>
+                <pre className="text-cyan-300 whitespace-pre">{commandOutput || '(出力なし)'}</pre>
               </div>
             )}
 
@@ -701,7 +990,8 @@ const LinuxCommandQuiz: React.FC = () => {
                     </p>
                     {!result && (
                       <div>
-                        <p className="text-sm mb-1">正解: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">{currentQ.answer}</code></p>
+                        <p className="text-sm mb-1">正解例: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">{currentQ.answer}</code></p>
+                        <p className="text-sm mb-1">または: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">{currentQ.answer} {currentQ.file}</code></p>
                       </div>
                     )}
                     <p className="text-sm mt-2">{currentQ.explanation}</p>
@@ -709,7 +999,7 @@ const LinuxCommandQuiz: React.FC = () => {
                 </div>
                 <button
                   onClick={nextQuestion}
-                  className="w-full bg-green-500 bg-opacity-20 hover:bg-opacity-30 text-white font-bold py-2 px-4 rounded transition mt-2"
+                  className="w-full bg-purple-500 bg-opacity-20 hover:bg-opacity-30 text-white font-bold py-2 px-4 rounded transition mt-2"
                 >
                   {currentQuestion < currentQuestions.length - 1 ? '次の問題へ' : 'クイズを終了'}
                 </button>
@@ -722,9 +1012,9 @@ const LinuxCommandQuiz: React.FC = () => {
           <h4 className="font-semibold mb-2">💡 使い方</h4>
           <ul className="space-y-1">
             <li>• レベルとコマンドを選択してクイズに挑戦</li>
-            <li>• パイプ記号の後のコマンドのみを入力してください（例: grep パターン）</li>
+            <li>• <code className="bg-gray-700 px-1 rounded">cat file.txt | grep pattern</code> または <code className="bg-gray-700 px-1 rounded">grep pattern file.txt</code> の両方の形式で入力可能</li>
             <li>• わからない場合は「ヒント」ボタンをクリック</li>
-            <li>• 正解すると解説が表示されます</li>
+            <li>• 実行後にコマンドの出力結果が表示されます</li>
           </ul>
         </div>
       </div>
