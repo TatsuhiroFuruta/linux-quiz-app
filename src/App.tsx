@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Terminal, CheckCircle, XCircle, Lightbulb } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Terminal, CheckCircle, XCircle, Lightbulb, Home, Clock, Trophy, BookOpen } from 'lucide-react';
 
 // 型定義
 interface Question {
@@ -25,8 +25,11 @@ interface Score {
 
 type Level = 'beginner' | 'intermediate' | 'advanced';
 type CommandType = 'grep' | 'sed' | 'awk';
+type Mode = 'home' | 'practice' | 'timeattack';
 
 const LinuxCommandQuiz: React.FC = () => {
+  // State管理
+  const [mode, setMode] = useState<Mode>('home');
   const [level, setLevel] = useState<Level>('beginner');
   const [commandType, setCommandType] = useState<CommandType>('grep');
   const [currentQuestion, setCurrentQuestion] = useState<number>(0);
@@ -35,6 +38,12 @@ const LinuxCommandQuiz: React.FC = () => {
   const [showHint, setShowHint] = useState<boolean>(false);
   const [score, setScore] = useState<Score>({ correct: 0, total: 0 });
   const [commandOutput, setCommandOutput] = useState<string>('');
+
+  // タイムアタック用State
+  const [timeAttackQuestions, setTimeAttackQuestions] = useState<Question[]>([]);
+  const [timeElapsed, setTimeElapsed] = useState<number>(0);
+  const [isTimeAttackActive, setIsTimeAttackActive] = useState<boolean>(false);
+  const [timeAttackFinished, setTimeAttackFinished] = useState<boolean>(false);
 
   const questions: Questions = {
     grep: {
@@ -549,8 +558,63 @@ const LinuxCommandQuiz: React.FC = () => {
     }
   };
 
-  const currentQuestions = questions[commandType][level];
-  const currentQ = currentQuestions[currentQuestion];
+  // タイマー処理
+  useEffect(() => {
+    let interval: number;
+    if (isTimeAttackActive && !timeAttackFinished) {
+      interval = setInterval(() => {
+        setTimeElapsed(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isTimeAttackActive, timeAttackFinished]);
+
+  // ユーティリティ関数
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const resetQuiz = () => {
+    setCurrentQuestion(0);
+    setUserAnswer('');
+    setResult(null);
+    setShowHint(false);
+    setScore({ correct: 0, total: 0 });
+    setCommandOutput('');
+  };
+
+  const goHome = () => {
+    setMode('home');
+    resetQuiz();
+    setIsTimeAttackActive(false);
+    setTimeAttackFinished(false);
+    setTimeElapsed(0);
+  };
+
+  // タイムアタック開始
+  const startTimeAttack = (selectedLevel: Level) => {
+    const allQuestions: Question[] = [];
+    Object.values(questions).forEach(cmdQuestions => {
+      allQuestions.push(...cmdQuestions[selectedLevel]);
+    });
+
+    const shuffled = allQuestions.sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, 6);
+
+    setTimeAttackQuestions(selected);
+    setMode('timeattack');
+    setLevel(selectedLevel);
+    setCurrentQuestion(0);
+    setScore({ correct: 0, total: 0 });
+    setTimeElapsed(0);
+    setIsTimeAttackActive(true);
+    setTimeAttackFinished(false);
+    setResult(null);
+    setUserAnswer('');
+    setCommandOutput('');
+  };
 
   // コマンド実行のシミュレーション
   const simulateCommand = (command: string, data: string): string => {
@@ -791,15 +855,13 @@ const LinuxCommandQuiz: React.FC = () => {
   // 答えのチェック（複数形式対応）
   const checkAnswer = () => {
     const userCmd = userAnswer.trim();
+    const currentQ = mode === 'timeattack' ? timeAttackQuestions[currentQuestion] : questions[commandType][level][currentQuestion];
     const correctCmd = currentQ.answer;
     const fileName = currentQ.file;
 
     // スペースの正規化
     const normalizedUser = userCmd.replace(/\s+/g, ' ');
     const normalizedCorrect = correctCmd.replace(/\s+/g, ' ');
-
-    // パイプ形式と引数形式の両方を許可
-    let isCorrect = false;
 
     const hasIgnoreCaseOption = normalizedCorrect.includes('-i') || normalizedUser.includes('-i');
 
@@ -815,6 +877,9 @@ const LinuxCommandQuiz: React.FC = () => {
       }
       return cmd1 === cmd2;
     };
+
+    // パイプ形式と引数形式の両方を許可
+    let isCorrect = false;
 
     // 1. 完全一致（-iオプション考慮）
     if (compareCommands(normalizedUser, normalizedCorrect)) {
@@ -858,74 +923,210 @@ const LinuxCommandQuiz: React.FC = () => {
     }));
   };
 
+  // 次の問題へ
   const nextQuestion = () => {
-    if (currentQuestion < currentQuestions.length - 1) {
+    const totalQuestions = mode === 'timeattack' ? timeAttackQuestions.length : questions[commandType][level].length;
+
+    if (currentQuestion < totalQuestions - 1) {
       setCurrentQuestion(currentQuestion + 1);
       setUserAnswer('');
       setResult(null);
       setShowHint(false);
       setCommandOutput('');
     } else {
-      alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total + 1}`);
-      setCurrentQuestion(0);
-      setUserAnswer('');
-      setResult(null);
-      setShowHint(false);
-      setScore({ correct: 0, total: 0 });
-      setCommandOutput('');
+      if (mode === 'timeattack') {
+        setIsTimeAttackActive(false);
+        setTimeAttackFinished(true);
+      } else {
+        alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total + 1}`);
+        resetQuiz();
+      }
     }
   };
 
-  const resetQuiz = () => {
-    setCurrentQuestion(0);
-    setUserAnswer('');
-    setResult(null);
-    setShowHint(false);
-    setScore({ correct: 0, total: 0 });
-    setCommandOutput('');
-  };
+  // ホーム画面
+  if (mode === 'home') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 flex items-center justify-center">
+        <div className="max-w-2xl w-full">
+          <div className="text-center mb-12">
+            <Terminal className="w-20 h-20 text-green-400 mx-auto mb-4" />
+            <h1 className="text-5xl font-bold mb-2">Linux コマンド練習</h1>
+            <p className="text-gray-400 text-lg">grep / sed / awk をマスターしよう</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <button
+              onClick={() => setMode('practice')}
+              className="bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 p-8 rounded-xl shadow-xl transition transform hover:scale-105"
+            >
+              <BookOpen className="w-16 h-16 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold mb-2">練習する</h2>
+              <p className="text-blue-200">じっくり学習モード</p>
+              <p className="text-sm text-blue-300 mt-2">ヒント機能あり・時間制限なし</p>
+            </button>
+
+            <div className="bg-gradient-to-br from-orange-600 to-orange-700 p-8 rounded-xl shadow-xl">
+              <Trophy className="w-16 h-16 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold mb-4">タイムアタック</h2>
+              <p className="text-orange-200 mb-4">6問ランダム出題</p>
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => startTimeAttack('beginner')}
+                  className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition hover:scale-105"
+                >
+                  初心者コース
+                </button>
+                <button
+                  onClick={() => startTimeAttack('intermediate')}
+                  className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition hover:scale-105"
+                >
+                  中級者コース
+                </button>
+                <button
+                  onClick={() => startTimeAttack('advanced')}
+                  className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition hover:scale-105"
+                >
+                  上級者コース
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // タイムアタック結果画面
+  if (mode === 'timeattack' && timeAttackFinished) {
+    const finalScore = score.correct + (result ? 1 : 0);
+    const finalTotal = score.total + 1;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 flex items-center justify-center">
+        <div className="max-w-2xl w-full bg-gray-800 rounded-xl p-8 shadow-2xl">
+          <div className="text-center mb-8">
+            <Trophy className="w-24 h-24 text-yellow-400 mx-auto mb-4" />
+            <h1 className="text-4xl font-bold mb-2">タイムアタック完了！</h1>
+            <p className="text-gray-400">お疲れ様でした</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6 mb-8">
+            <div className="bg-gray-900 rounded-lg p-6 text-center">
+              <Clock className="w-12 h-12 text-blue-400 mx-auto mb-2" />
+              <p className="text-gray-400 mb-1">経過時間</p>
+              <p className="text-4xl font-bold">{formatTime(timeElapsed)}</p>
+            </div>
+            <div className="bg-gray-900 rounded-lg p-6 text-center">
+              <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
+              <p className="text-gray-400 mb-1">正答数</p>
+              <p className="text-4xl font-bold">{finalScore} / {finalTotal}</p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => startTimeAttack(level)}
+              className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-6 rounded-lg transition"
+            >
+              もう一度挑戦
+            </button>
+            <button
+              onClick={goHome}
+              className="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-4 px-6 rounded-lg transition flex items-center justify-center gap-2"
+            >
+              <Home className="w-5 h-5" />
+              ホームへ
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // クイズ画面（練習・タイムアタック共通）
+  const currentQuestions = mode === 'timeattack' ? timeAttackQuestions : questions[commandType][level];
+  const currentQ = currentQuestions[currentQuestion];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <Terminal className="w-10 h-10 text-green-400" />
-          <h1 className="text-3xl font-bold">Linux コマンド練習アプリ</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <Terminal className="w-10 h-10 text-green-400" />
+            <h1 className="text-3xl font-bold">
+              {mode === 'timeattack' ? 'タイムアタック' : 'Linux コマンド練習'}
+            </h1>
+          </div>
+          <button
+            onClick={goHome}
+            className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition flex items-center gap-2"
+          >
+            <Home className="w-5 h-5" />
+            ホーム
+          </button>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-6 mb-6 shadow-xl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium mb-2">レベル</label>
-              <select
-                value={level}
-                onChange={(e) => { setLevel(e.target.value as Level); resetQuiz(); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="beginner">初心者</option>
-                <option value="intermediate">中級者</option>
-                <option value="advanced">上級者</option>
-              </select>
+        {mode === 'timeattack' && (
+          <div className="bg-gray-800 rounded-lg p-4 mb-6 flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Clock className="w-6 h-6 text-blue-400" />
+              <span className="text-2xl font-bold">{formatTime(timeElapsed)}</span>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">コマンド</label>
-              <select
-                value={commandType}
-                onChange={(e) => { setCommandType(e.target.value as CommandType); resetQuiz(); }}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="grep">grep</option>
-                <option value="sed">sed</option>
-                <option value="awk">awk</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">スコア</label>
-              <div className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-center font-bold">
-                {score.correct} / {score.total}
-              </div>
+            <div className="text-lg">
+              <span className="text-gray-400">レベル: </span>
+              <span className="font-bold">
+                {level === 'beginner' ? '初心者' : level === 'intermediate' ? '中級者' : '上級者'}
+              </span>
             </div>
           </div>
+        )}
+
+        <div className="bg-gray-800 rounded-lg p-6 mb-6 shadow-xl">
+          {mode === 'practice' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium mb-2">レベル</label>
+                <select
+                  value={level}
+                  onChange={(e) => { setLevel(e.target.value as Level); resetQuiz(); }}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="beginner">初心者</option>
+                  <option value="intermediate">中級者</option>
+                  <option value="advanced">上級者</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">コマンド</label>
+                <select
+                  value={commandType}
+                  onChange={(e) => { setCommandType(e.target.value as CommandType); resetQuiz(); }}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="grep">grep</option>
+                  <option value="sed">sed</option>
+                  <option value="awk">awk</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">スコア</label>
+                <div className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-center font-bold">
+                  {score.correct} / {score.total}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mode === 'timeattack' && (
+            <div className="mb-6">
+              <div className="bg-gray-700 border border-gray-600 rounded px-4 py-2 flex justify-between items-center">
+                <span className="text-lg font-medium">スコア</span>
+                <span className="text-2xl font-bold">{score.correct} / {score.total}</span>
+              </div>
+            </div>
+          )}
 
           <div className="bg-gray-900 rounded p-4 mb-4">
             <div className="flex justify-between items-center mb-2">
@@ -950,8 +1151,8 @@ const LinuxCommandQuiz: React.FC = () => {
                     type="text"
                     value={userAnswer}
                     onChange={(e) => setUserAnswer(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && checkAnswer()}
-                    placeholder={`cat ${currentQ.file} | ${commandType} ... または ${commandType} ... ${currentQ.file}`}
+                    onKeyPress={(e) => e.key === 'Enter' && result === null && checkAnswer()}
+                    placeholder={`cat ${currentQ.file} | コマンド ...`}
                     className="flex-1 bg-transparent outline-none text-green-300"
                     disabled={result !== null}
                   />
@@ -967,17 +1168,19 @@ const LinuxCommandQuiz: React.FC = () => {
                 >
                   実行
                 </button>
-                <button
-                  onClick={() => setShowHint(!showHint)}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition flex items-center gap-2"
-                >
-                  <Lightbulb className="w-4 h-4" />
-                  ヒント
-                </button>
+                {mode === 'practice' && (
+                  <button
+                    onClick={() => setShowHint(!showHint)}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded transition flex items-center gap-2"
+                  >
+                    <Lightbulb className="w-4 h-4" />
+                    ヒント
+                  </button>
+                )}
               </div>
             )}
 
-            {showHint && result === null && (
+            {showHint && result === null && mode === 'practice' && (
               <div className="bg-yellow-900 border border-yellow-600 rounded p-3 mb-3">
                 <div className="flex items-start gap-2">
                   <Lightbulb className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
@@ -1016,24 +1219,26 @@ const LinuxCommandQuiz: React.FC = () => {
                 </div>
                 <button
                   onClick={nextQuestion}
-                  className="w-full bg-purple-500 bg-opacity-20 hover:bg-opacity-30 text-white font-bold py-2 px-4 rounded transition mt-2"
+                  className="w-full bg-white bg-opacity-20 hover:bg-gray-200 hover:bg-opacity-30 text-black font-bold py-2 px-4 rounded transition mt-2"
                 >
-                  {currentQuestion < currentQuestions.length - 1 ? '次の問題へ' : 'クイズを終了'}
+                  {currentQuestion < currentQuestions.length - 1 ? '次の問題へ' : mode === 'timeattack' ? '結果を見る' : 'クイズを終了'}
                 </button>
               </div>
             )}
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-300">
-          <h4 className="font-semibold mb-2">💡 使い方</h4>
-          <ul className="space-y-1">
-            <li>• レベルとコマンドを選択してクイズに挑戦</li>
-            <li>• <code className="bg-gray-700 px-1 rounded">cat file.txt | grep pattern</code> または <code className="bg-gray-700 px-1 rounded">grep pattern file.txt</code> の両方の形式で入力可能</li>
-            <li>• わからない場合は「ヒント」ボタンをクリック</li>
-            <li>• 実行後にコマンドの出力結果が表示されます</li>
-          </ul>
-        </div>
+        {mode === 'practice' && (
+          <div className="bg-gray-800 rounded-lg p-4 text-sm text-gray-300">
+            <h4 className="font-semibold mb-2">💡 使い方</h4>
+            <ul className="space-y-1">
+              <li>• レベルとコマンドを選択してクイズに挑戦</li>
+              <li>• <code className="bg-gray-700 px-1 rounded">cat file.txt | grep pattern</code> または <code className="bg-gray-700 px-1 rounded">grep pattern file.txt</code> の両方の形式で入力可能</li>
+              <li>• わからない場合は「ヒント」ボタンをクリック</li>
+              <li>• 実行後にコマンドの出力結果が表示されます</li>
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );
