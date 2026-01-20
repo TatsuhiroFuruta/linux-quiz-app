@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal, CheckCircle, XCircle, Lightbulb, Home, Clock, Trophy, BookOpen } from 'lucide-react';
+import { Terminal, CheckCircle, XCircle, Lightbulb, Home, Clock, Trophy, BookOpen, Share2 } from 'lucide-react';
 
 // 型定義
 interface Question {
@@ -593,6 +593,23 @@ const LinuxCommandQuiz: React.FC = () => {
     setTimeElapsed(0);
   };
 
+  // Xでシェア
+  const shareToTwitter = () => {
+    const levelText = level === 'beginner' ? '初心者' : level === 'intermediate' ? '中級者' : '上級者';
+    const finalScore = score.correct + (result ? 1 : 0);
+    const finalTotal = score.total;
+    const accuracy = Math.round((finalScore / finalTotal) * 100);
+
+    const text = `Linuxコマンド練習アプリ - タイムアタック結果\n\n` +
+                 `📊 レベル: ${levelText}\n` +
+                 `⏱️ タイム: ${formatTime(timeElapsed)}\n` +
+                 `✅ 正答数: ${finalScore}/${finalTotal} (${accuracy}%)\n\n` +
+                 `#Linuxコマンド練習 #grep_sed_awkをマスターしよう`;
+
+    const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   // タイムアタック開始
   const startTimeAttack = (selectedLevel: Level) => {
     const allQuestions: Question[] = [];
@@ -938,7 +955,7 @@ const LinuxCommandQuiz: React.FC = () => {
         setIsTimeAttackActive(false);
         setTimeAttackFinished(true);
       } else {
-        alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total + 1}`);
+        alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total}`);
         resetQuiz();
       }
     }
@@ -1001,7 +1018,8 @@ const LinuxCommandQuiz: React.FC = () => {
   // タイムアタック結果画面
   if (mode === 'timeattack' && timeAttackFinished) {
     const finalScore = score.correct + (result ? 1 : 0);
-    const finalTotal = score.total + 1;
+    const finalTotal = score.total;
+    const accuracy = Math.round((finalScore / finalTotal) * 100);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white p-6 flex items-center justify-center">
@@ -1022,7 +1040,18 @@ const LinuxCommandQuiz: React.FC = () => {
               <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-2" />
               <p className="text-gray-400 mb-1">正答数</p>
               <p className="text-4xl font-bold">{finalScore} / {finalTotal}</p>
+              <p className="text-sm text-gray-400 mt-1">正答率: {accuracy}%</p>
             </div>
+          </div>
+
+          <div className="mb-4">
+            <button
+              onClick={shareToTwitter}
+              className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-4 px-6 rounded-lg transition flex items-center justify-center gap-2 mb-3"
+            >
+              <Share2 className="w-5 h-5" />
+              結果をXでシェア
+            </button>
           </div>
 
           <div className="flex gap-4">
