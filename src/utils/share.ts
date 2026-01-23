@@ -15,7 +15,7 @@ export const shareToTwitter = (
                `📊 レベル: ${levelText}\n` +
                `⏱️ タイム: ${formatTime(timeElapsed)}\n` +
                `✅ 正答数: ${correctCount}/${totalCount} (${accuracy}%)\n\n` +
-               `#Linuxコマンド #プログラミング学習`;
+               `#Linuxコマンド練習 #grep_sed_awkをマスターしよう`;
 
   const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
   window.open(url, '_blank', 'noopener,noreferrer');

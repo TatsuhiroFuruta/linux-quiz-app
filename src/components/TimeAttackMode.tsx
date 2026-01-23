@@ -79,7 +79,7 @@ export const TimeAttackMode: React.FC<TimeAttackModeProps> = ({ level, onGoHome,
 
   if (isFinished) {
     const finalScore = score.correct + (result ? 1 : 0);
-    const finalTotal = score.total + 1;
+    const finalTotal = score.total;
 
     return (
       <TimeAttackResult

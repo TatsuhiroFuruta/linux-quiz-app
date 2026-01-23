@@ -48,7 +48,7 @@ export const PracticeMode: React.FC<PracticeModeProps> = ({ onGoHome }) => {
       userAnswer.includes('|') ? userAnswer.split('|')[1].trim() : userAnswer,
       currentQ.data
     );
-    
+
     setCommandOutput(output);
     setResult(isCorrect);
     setScore(prev => ({
@@ -65,7 +65,7 @@ export const PracticeMode: React.FC<PracticeModeProps> = ({ onGoHome }) => {
       setShowHint(false);
       setCommandOutput('');
     } else {
-      alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total + 1}`);
+      alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total}`);
       resetQuiz();
     }
   };

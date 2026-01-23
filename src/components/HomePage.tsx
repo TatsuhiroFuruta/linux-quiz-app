@@ -36,19 +36,19 @@ export const HomePage: React.FC<HomePageProps> = ({ onSelectPractice, onSelectTi
             <div className="space-y-2">
               <button
                 onClick={() => onSelectTimeAttack('beginner')}
-                className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 py-3 rounded-lg font-bold transition"
+                className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition transform hover:scale-105"
               >
                 初心者コース
               </button>
               <button
                 onClick={() => onSelectTimeAttack('intermediate')}
-                className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 py-3 rounded-lg font-bold transition"
+                className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition transform hover:scale-105"
               >
                 中級者コース
               </button>
               <button
                 onClick={() => onSelectTimeAttack('advanced')}
-                className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 py-3 rounded-lg font-bold transition"
+                className="w-full bg-gray-800 bg-opacity-20 hover:bg-gray-700 hover:bg-opacity-30 py-3 rounded-lg font-bold transition transform hover:scale-105"
               >
                 上級者コース
               </button>

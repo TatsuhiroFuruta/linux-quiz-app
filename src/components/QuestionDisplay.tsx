@@ -123,7 +123,7 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
           </div>
           <button
             onClick={onNext}
-            className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-bold py-2 px-4 rounded transition mt-2"
+            className="w-full bg-white bg-opacity-20 hover:bg-gray-200 hover:bg-opacity-30 text-black font-bold py-2 px-4 rounded transition mt-2"
           >
             {currentQuestionNumber < totalQuestions ? '次の問題へ' : '結果を見る'}
           </button>
