@@ -177,54 +177,54 @@ export const questions: Questions = {
         title: '文字列の置換',
         data: 'hello world\nhello everyone\nhello there',
         task: 'helloをhiに置換してください',
-        answer: 'sed s/hello/hi/',
-        hint: 's/検索/置換/の形式を使います',
-        explanation: 'sed s/hello/hi/ で最初のhelloをhiに置換します',
+        answer: 'sed \'s/hello/hi/\'',
+        hint: '\'s/検索/置換/\'の形式を使います',
+        explanation: 'sed \'s/hello/hi/\' で最初のhelloをhiに置換します',
         file: 'greetings.txt'
       },
       {
         title: '特定の行を削除',
         data: 'line1\nline2\nline3\nline4',
         task: '2行目を削除してください',
-        answer: 'sed 2d',
+        answer: 'sed \'2d\'',
         hint: '行番号dで削除できます',
-        explanation: 'sed 2d で2行目を削除します',
+        explanation: 'sed \'2d\' で2行目を削除します',
         file: 'lines.txt'
       },
       {
         title: '空行の削除',
         data: 'line1\n\nline2\n\nline3',
         task: '空行を削除してください',
-        answer: 'sed /^$/d',
+        answer: 'sed \'/^$/d\'',
         hint: '^$は空行を意味します。dで削除',
-        explanation: 'sed /^$/d で空行を削除します',
+        explanation: 'sed \'/^$/d\' で空行を削除します',
         file: 'document.txt'
       },
       {
         title: '特定の文字を削除',
         data: 'a1b2c3\nd4e5f6',
         task: '数字を全て削除してください',
-        answer: 'sed s/[0-9]//g',
+        answer: 'sed \'s/[0-9]//g\'',
         hint: '[0-9]は数字、//は空文字への置換、gは全て',
-        explanation: 'sed s/[0-9]//g で数字を削除します',
+        explanation: 'sed \'s/[0-9]//g\' で数字を削除します',
         file: 'mixed.txt'
       },
       {
         title: 'スペースの削除',
         data: 'hello world\ngood  morning\nnice   day',
         task: '全てのスペースを削除してください',
-        answer: 'sed s/ //g',
-        hint: 's/ //g でスペースを空文字に置換',
-        explanation: 'sed s/ //g で全てのスペースを削除します',
+        answer: 'sed \'s/ //g\'',
+        hint: '\'s/ //g\' でスペースを空文字に置換',
+        explanation: 'sed \'s/ //g\' で全てのスペースを削除します',
         file: 'spaced.txt'
       },
       {
         title: '最初の行を削除',
         data: 'header\ndata1\ndata2\ndata3',
         task: '1行目を削除してください',
-        answer: 'sed 1d',
+        answer: 'sed \'1d\'',
         hint: '1dで1行目を削除',
-        explanation: 'sed 1d で1行目を削除します',
+        explanation: 'sed \'1d\' で1行目を削除します',
         file: 'table.txt'
       }
     ],
@@ -233,54 +233,54 @@ export const questions: Questions = {
         title: '全ての出現を置換',
         data: 'cat cat dog cat',
         task: '全てのcatをbirdに置換してください',
-        answer: 'sed s/cat/bird/g',
+        answer: 'sed \'s/cat/bird/g\'',
         hint: '末尾にgフラグを付けます',
-        explanation: 'sed s/cat/bird/g でgフラグにより全てのcatを置換します',
+        explanation: 'sed \'s/cat/bird/g\' でgフラグにより全てのcatを置換します',
         file: 'animals.txt'
       },
       {
         title: '行頭・行末の操作',
         data: 'apple\nbanana\ncherry',
         task: '各行の先頭に「- 」を追加してください',
-        answer: 'sed s/^/- /',
+        answer: 'sed \'s/^/- /\'',
         hint: '^は行頭を意味します',
-        explanation: 'sed s/^/- / で行頭に文字列を追加します',
+        explanation: 'sed \'s/^/- /\' で行頭に文字列を追加します',
         file: 'list.txt'
       },
       {
         title: '特定範囲の行を削除',
         data: 'line1\nline2\nline3\nline4\nline5',
         task: '2行目から4行目を削除してください',
-        answer: 'sed 2,4d',
+        answer: 'sed \'2,4d\'',
         hint: '開始,終了dで範囲削除できます',
-        explanation: 'sed 2,4d で2〜4行目を削除します',
+        explanation: 'sed \'2,4d\' で2〜4行目を削除します',
         file: 'data.txt'
       },
       {
         title: '行末に文字を追加',
         data: 'apple\nbanana\ncherry',
         task: '各行の末尾に「.txt」を追加してください',
-        answer: 'sed s/$/.txt/',
+        answer: 'sed \'s/$/.txt/\'',
         hint: '$は行末を意味します',
-        explanation: 'sed s/$/.txt/ で行末に文字列を追加します',
+        explanation: 'sed \'s/$/.txt/\' で行末に文字列を追加します',
         file: 'files.txt'
       },
       {
         title: '複数のスペースを1つに',
         data: 'hello  world\ngood   morning\nnice    day',
         task: '連続するスペースを1つのスペースに置換してください',
-        answer: 'sed "s/  */ /g"',
+        answer: 'sed \'s/  */ /g\'',
         hint: '*は0回以上の繰り返し',
-        explanation: 'sed "s/  */ /g" で複数スペースを1つに置換',
+        explanation: 'sed \'s/  */ /g\' で複数スペースを1つに置換',
         file: 'spacing.txt'
       },
       {
         title: '特定のパターンを含む行を削除',
         data: 'keep this\ndelete ERROR\nkeep that\ndelete WARNING',
         task: 'deleteを含む行を削除してください',
-        answer: 'sed /delete/d',
+        answer: 'sed \'/delete/d\'',
         hint: '/パターン/d で該当行を削除',
-        explanation: 'sed /delete/d でパターンを含む行を削除します',
+        explanation: 'sed \'/delete/d\' でパターンを含む行を削除します',
         file: 'filter.txt'
       }
     ],
@@ -289,7 +289,7 @@ export const questions: Questions = {
         title: '複数の置換',
         data: 'IP: 192.168.1.1, Port: 8080',
         task: 'IPアドレスを xxx.xxx.xxx.xxx に、ポートを **** にマスキングしてください',
-        answer: 'sed -e "s/[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/xxx.xxx.xxx.xxx/" -e "s/[0-9]\\+/****/"',
+        answer: 'sed -e \'s/[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\.[0-9]\\+/xxx.xxx.xxx.xxx/\' -e \'s/[0-9]\\+/****/\'',
         hint: '-eで複数のコマンドを実行できます',
         explanation: '複数の-eオプションで連続した置換を行います',
         file: 'config.txt'
@@ -298,16 +298,16 @@ export const questions: Questions = {
         title: '条件付き置換',
         data: 'ERROR: failed\nINFO: success\nERROR: timeout',
         task: 'ERRORを含む行のみ、failedをFAILEDに置換してください',
-        answer: 'sed "/ERROR/s/failed/FAILED/"',
+        answer: 'sed \'/ERROR/s/failed/FAILED/\'',
         hint: '/パターン/s/検索/置換/の形式を使います',
-        explanation: 'sed "/ERROR/s/failed/FAILED/" で条件付き置換ができます',
+        explanation: 'sed \'/ERROR/s/failed/FAILED/\' で条件付き置換ができます',
         file: 'logs.txt'
       },
       {
         title: '正規表現を使った複雑な置換',
         data: 'Price: $100.50\nPrice: $250.00\nPrice: $75.99',
         task: '価格の数値部分を0.00に置換してください',
-        answer: 'sed "s/\\$[0-9]\\+\\.[0-9]\\+/\\$0.00/g"',
+        answer: 'sed \'s/\\$[0-9]\\+\\.[0-9]\\+/\\$0.00/g\'',
         hint: '\\$でドル記号をエスケープ、[0-9]\\+で数字の繰り返し',
         explanation: '正規表現で価格パターンをマッチさせて置換します',
         file: 'prices.txt'
@@ -316,27 +316,27 @@ export const questions: Questions = {
         title: '行の入れ替え',
         data: 'Alice,Tokyo\nBob,Osaka\nCarol,Kyoto',
         task: 'カンマの前後を入れ替えてください（Tokyo,Alice形式に）',
-        answer: 'sed "s/\\(.*\\),\\(.*\\)/\\2,\\1/"',
+        answer: 'sed \'s/\\(.*\\),\\(.*\\)/\\2,\\1/\'',
         hint: '\\(\\)でグループ化、\\1 \\2で参照できます',
-        explanation: 'sed "s/\\(.*\\),\\(.*\\)/\\2,\\1/" でグループを入れ替えます',
+        explanation: 'sed \'s/\\(.*\\),\\(.*\\)/\\2,\\1/\' でグループを入れ替えます',
         file: 'records.csv'
       },
       {
         title: '大文字小文字の変換',
         data: 'hello world\ngood morning\nnice day',
         task: '行頭の文字を大文字に変換してください',
-        answer: 'sed "s/^./\\U&/"',
+        answer: 'sed \'s/^./\\U&/\'',
         hint: '&はマッチした文字列、\\Uは大文字変換',
-        explanation: 'sed "s/^./\\U&/" で行頭を大文字に変換します',
+        explanation: 'sed \'s/^./\\U&/\' で行頭を大文字に変換します',
         file: 'sentences.txt'
       },
       {
         title: '特定の行のみ置換',
         data: 'apple\nbanana\napple\ncherry\napple',
         task: '3行目のappleのみをorangeに置換してください',
-        answer: 'sed "3s/apple/orange/"',
+        answer: 'sed \'3s/apple/orange/\'',
         hint: '行番号s/検索/置換/で特定行のみ置換',
-        explanation: 'sed "3s/apple/orange/" で3行目のみ置換します',
+        explanation: 'sed \'3s/apple/orange/\' で3行目のみ置換します',
         file: 'fruits_list.txt'
       }
     ]
