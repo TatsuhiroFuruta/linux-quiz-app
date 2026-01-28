@@ -87,7 +87,7 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
       {showHint && result === null && isPracticeMode && (
         <div className="bg-yellow-900 border border-yellow-600 rounded p-3 mb-3">
           <div className="flex items-start gap-2">
-            <Lightbulb className="w-5 h-5 text-yellow-300 flex-shrink-0 mt-0.5" />
+            <Lightbulb className="w-5 h-5 text-yellow-300 shrink-0 mt-0.5" />
             <p className="text-yellow-100">{question.hint}</p>
           </div>
         </div>
@@ -104,9 +104,9 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
         <div className={`rounded p-4 mb-3 ${result ? 'bg-green-900 border border-green-600' : 'bg-red-900 border border-red-600'}`}>
           <div className="flex items-start gap-2 mb-2">
             {result ? (
-              <CheckCircle className="w-6 h-6 text-green-300 flex-shrink-0" />
+              <CheckCircle className="w-6 h-6 text-green-300 shrink-0" />
             ) : (
-              <XCircle className="w-6 h-6 text-red-300 flex-shrink-0" />
+              <XCircle className="w-6 h-6 text-red-300 shrink-0" />
             )}
             <div className="flex-1">
               <p className="font-bold mb-1">
@@ -114,8 +114,8 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
               </p>
               {!result && (
                 <div>
-                  <p className="text-sm mb-1">正解例: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">{question.answer}</code></p>
-                  <p className="text-sm mb-1">または: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">{question.answer} {question.file}</code></p>
+                  <p className="text-sm mb-1">正解例: <code className="bg-black/50 px-2 py-1 rounded">{question.answer}</code></p>
+                  <p className="text-sm mb-1">または: <code className="bg-black/50 px-2 py-1 rounded">{question.answer} {question.file}</code></p>
                 </div>
               )}
               <p className="text-sm mt-2">{question.explanation}</p>
@@ -123,7 +123,7 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
           </div>
           <button
             onClick={onNext}
-            className="w-full bg-white bg-opacity-20 hover:bg-gray-200 hover:bg-opacity-30 text-black font-bold py-2 px-4 rounded transition mt-2"
+            className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-2 px-4 rounded transition mt-2"
           >
             {currentQuestionNumber < totalQuestions ? '次の問題へ' : '結果を見る'}
           </button>
