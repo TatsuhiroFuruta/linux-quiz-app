@@ -2,7 +2,7 @@
 const compareCommands = (cmd1: string, cmd2: string, hasIgnoreCaseOption: boolean): boolean => {
   if (hasIgnoreCaseOption) {
     const normalize = (cmd: string) => {
-      return cmd.replace(/(-i\s+)(\S+)/, (match, flag, pattern) => {
+      return cmd.replace(/(-i\s+)(\S+)/, (_match, flag, pattern) => {
         return flag + pattern.toLowerCase();
       }).toLowerCase();
     };
