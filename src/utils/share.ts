@@ -11,12 +11,16 @@ export const shareToTwitter = (
   const levelText = getLevelText(level);
   const accuracy = Math.round((correctCount / totalCount) * 100);
 
+  // アプリのURL
+  const appUrl = window.location.origin; // 現在のURLを自動取得
+
   const text = `Linuxコマンド練習アプリ - タイムアタック結果\n\n` +
                `📊 レベル: ${levelText}\n` +
                `⏱️ タイム: ${formatTime(timeElapsed)}\n` +
                `✅ 正答数: ${correctCount}/${totalCount} (${accuracy}%)\n\n` +
-               `#Linuxコマンド練習 #grep_sed_awkをマスターしよう`;
+               `#Linuxコマンド #grep_sed_awkをマスターしよう\n` +
+               `${appUrl}`;
 
-  const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+  window.open(twitterUrl, '_blank', 'noopener,noreferrer');
 };
