@@ -65,7 +65,7 @@ export const PracticeMode: React.FC<PracticeModeProps> = ({ onGoHome }) => {
       setShowHint(false);
       setCommandOutput('');
     } else {
-      alert(`お疲れ様でした！スコア: ${score.correct + (result ? 1 : 0)}/${score.total}`);
+      alert(`お疲れ様でした！スコア: ${score.correct}/${score.total}`);
       resetQuiz();
     }
   };
