@@ -1,42 +1,45 @@
 // grep コマンドのシミュレーション
 const simulateGrep = (args: string, lines: string[]): string => {
-  if (args.startsWith('-v ')) {
-    const pattern = args.substring(3).trim();
+  // クォートを除去
+  const cleanArgs = args.replace(/^['"]|['"]$/g, '');
+
+  if (cleanArgs.startsWith('-v ')) {
+    const pattern = cleanArgs.substring(3).trim();
     return lines.filter(line => !line.includes(pattern)).join('\n');
   }
 
-  if (args.startsWith('-i ')) {
-    const pattern = args.substring(3).trim().toLowerCase();
+  if (cleanArgs.startsWith('-i ')) {
+    const pattern = cleanArgs.substring(3).trim().toLowerCase();
     return lines.filter(line => line.toLowerCase().includes(pattern)).join('\n');
   }
 
-  if (args.startsWith('-c ')) {
-    const pattern = args.substring(3).trim();
+  if (cleanArgs.startsWith('-c ')) {
+    const pattern = cleanArgs.substring(3).trim();
     return lines.filter(line => line.includes(pattern)).length.toString();
   }
 
-  if (args.startsWith('-n ')) {
-    const pattern = args.substring(3).trim();
+  if (cleanArgs.startsWith('-n ')) {
+    const pattern = cleanArgs.substring(3).trim();
     return lines
       .map((line, idx) => (line.includes(pattern) ? `${idx + 1}:${line}` : null))
       .filter(Boolean)
       .join('\n');
   }
 
-  if (args.startsWith('-w ')) {
-    const pattern = args.substring(3).trim();
+  if (cleanArgs.startsWith('-w ')) {
+    const pattern = cleanArgs.substring(3).trim();
     const regex = new RegExp(`\\b${pattern}\\b`);
     return lines.filter(line => regex.test(line)).join('\n');
   }
 
-  if (args.startsWith('-E ')) {
-    const pattern = args.substring(3).replace(/"/g, '').trim();
+  if (cleanArgs.startsWith('-E ')) {
+    const pattern = cleanArgs.substring(3).replace(/"/g, '').trim();
     const regex = new RegExp(pattern);
     return lines.filter(line => regex.test(line)).join('\n');
   }
 
-  if (args.match(/-C\s+(\d+)\s+(.+)/)) {
-    const match = args.match(/-C\s+(\d+)\s+(.+)/);
+  if (cleanArgs.match(/-C\s+(\d+)\s+(.+)/)) {
+    const match = cleanArgs.match(/-C\s+(\d+)\s+(.+)/);
     if (match) {
       const context = parseInt(match[1]);
       const pattern = match[2].trim();
@@ -52,72 +55,81 @@ const simulateGrep = (args: string, lines: string[]): string => {
     }
   }
 
-  if (args.startsWith('^')) {
-    const pattern = args.substring(1);
+  if (cleanArgs.startsWith('^')) {
+    const pattern = cleanArgs.substring(1);
     return lines.filter(line => line.startsWith(pattern)).join('\n');
   }
 
-  if (args.includes('$')) {
-    const pattern = args.replace(/\\\./g, '.').replace('$', '');
+  if (cleanArgs.includes('$')) {
+    const pattern = cleanArgs.replace(/\\\./g, '.').replace('$', '');
     return lines.filter(line => line.endsWith(pattern)).join('\n');
   }
 
-  return lines.filter(line => line.includes(args.trim())).join('\n');
+  return lines.filter(line => line.includes(cleanArgs.trim())).join('\n');
 };
 
 // sed コマンドのシミュレーション
 const simulateSed = (command: string, lines: string[]): string => {
   let result = lines.slice();
 
-  if (command.match(/sed\s+(\d+)d/)) {
-    const lineNum = parseInt(command.match(/sed\s+(\d+)d/)![1]);
+  // クォートを除去してsedパターンを抽出
+  // sed 's/.../' または sed "s/..." または sed s/.../
+  const sedPattern = command.match(/sed\s+(?:['"])?(.*?)(?:['"])?$/);
+  if (!sedPattern) return result.join('\n');
+
+  const pattern = sedPattern[1];
+
+  // 行削除: 2d
+  if (pattern.match(/^(\d+)d$/)) {
+    const lineNum = parseInt(pattern.match(/^(\d+)d$/)![1]);
     result.splice(lineNum - 1, 1);
     return result.join('\n');
   }
 
-  if (command.match(/sed\s+(\d+),(\d+)d/)) {
-    const match = command.match(/sed\s+(\d+),(\d+)d/)!;
+  // 範囲削除: 2,4d
+  if (pattern.match(/^(\d+),(\d+)d$/)) {
+    const match = pattern.match(/^(\d+),(\d+)d$/)!;
     const start = parseInt(match[1]);
     const end = parseInt(match[2]);
     result.splice(start - 1, end - start + 1);
     return result.join('\n');
   }
 
-  if (command.includes('/^$/d')) {
+  // 空行削除: /^$/d
+  if (pattern.includes('/^$/d')) {
     return result.filter(line => line.trim() !== '').join('\n');
   }
 
-  if (command.match(/sed\s+\/(.+)\/d/)) {
-    const pattern = command.match(/sed\s+\/(.+)\/d/)![1];
-    return result.filter(line => !line.includes(pattern)).join('\n');
+  // パターン削除: /delete/d
+  if (pattern.match(/\/(.+)\/d/)) {
+    const deletePattern = pattern.match(/\/(.+)\/d/)![1];
+    return result.filter(line => !line.includes(deletePattern)).join('\n');
   }
 
-  if (command.includes('s/')) {
-    const sedMatch = command.match(/sed\s+(.+)/);
-    if (sedMatch) {
-      const sedCmd = sedMatch[1];
-
-      if (sedCmd.includes('-e')) {
-        const eCommands = sedCmd.match(/-e\s+"([^"]+)"/g);
-        if (eCommands) {
-          eCommands.forEach(eCmd => {
-            const match = eCmd.match(/-e\s+"s\/(.+?)\/(.+?)\/(g?)"/);
-            if (match) {
-              const [, search, replace, global] = match;
-              const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
-              result = result.map(line => line.replace(searchRegex, replace));
-            }
-          });
-          return result.join('\n');
-        }
+  // 置換: s/search/replace/g
+  if (pattern.includes('s/')) {
+    // 複数の-eオプション
+    if (command.includes('-e')) {
+      const eCommands = command.match(/-e\s+['"]([^'"]+)['"]/g);
+      if (eCommands) {
+        eCommands.forEach(eCmd => {
+          const match = eCmd.match(/-e\s+['"]s\/(.+?)\/(.+?)\/(g?)['"]/);
+          if (match) {
+            const [, search, replace, global] = match;
+            const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
+            result = result.map(line => line.replace(searchRegex, replace));
+          }
+        });
+        return result.join('\n');
       }
+    }
 
-      const match = sedCmd.match(/s\/(.+?)\/(.+?)\/(g?)/);
-      if (match) {
-        const [, search, replace, global] = match;
-        const searchRegex = new RegExp(search, global ? 'g' : '');
-        return result.map(line => line.replace(searchRegex, replace)).join('\n');
-      }
+    // 通常の置換
+    const match = pattern.match(/s\/(.+?)\/(.+?)\/(g?)/);
+    if (match) {
+      const [, search, replace, global] = match;
+      const searchRegex = new RegExp(search, global ? 'g' : '');
+      return result.map(line => line.replace(searchRegex, replace)).join('\n');
     }
   }
 

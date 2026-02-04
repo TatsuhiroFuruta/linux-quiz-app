@@ -108,7 +108,10 @@ export const questions: Questions = {
         title: '複数の単語を含む行',
         data: 'apple and banana\nonly apple\nbanana only\napple with cherry',
         task: 'appleとbananaの両方を含む行を抽出してください',
-        answer: 'grep apple | grep banana',
+        answer: [
+          'grep \'apple\' | grep \'banana\'',
+          'grep apple combos.txt | grep banana'
+        ],
         hint: 'パイプで2つのgrepを繋げます',
         explanation: 'grep apple | grep banana で両方を含む行を抽出',
         file: 'combos.txt'
@@ -146,7 +149,10 @@ export const questions: Questions = {
         title: '複数条件の組み合わせ',
         data: 'ERROR: Connection failed at 10:00\nWARN: Disk space low\nERROR: Timeout at 11:30\nINFO: System started',
         task: 'ERRORを含み、かつ「failed」または「Timeout」を含む行を抽出してください',
-        answer: 'grep ERROR | grep -E "failed|Timeout"',
+        answer: [
+          'grep \'ERROR\' | grep -E \'failed|Timeout\'',
+          'grep ERROR system.log | grep -E "failed|Timeout"'
+        ],
         hint: 'パイプで複数のgrepを繋げることができます',
         explanation: 'grepを2回使って条件を絞り込みます',
         file: 'system.log'

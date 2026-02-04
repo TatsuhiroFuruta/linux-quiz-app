@@ -114,8 +114,25 @@ export const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
               </p>
               {!result && (
                 <div>
-                  <p className="text-sm mb-1">正解例: <code className="bg-black/50 px-2 py-1 rounded">{question.answer}</code></p>
-                  <p className="text-sm mb-1">または: <code className="bg-black/50 px-2 py-1 rounded">{question.answer} {question.file}</code></p>
+                  {Array.isArray(question.answer) ? (
+                    <>
+                      <p className="text-sm mb-1">正解例:</p>
+                      {question.answer.map((ans, idx) => (
+                        <p key={idx} className="text-sm mb-1">
+                          {idx + 1}. <code className="bg-black/50 px-2 py-1 rounded">{ans}</code>
+                        </p>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm mb-1">
+                        正解例: <code className="bg-black/50 px-2 py-1 rounded">{question.answer}</code>
+                      </p>
+                      <p className="text-sm mb-1">
+                        または: <code className="bg-black/50 px-2 py-1 rounded">{question.answer} {question.file}</code>
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
               <p className="text-sm mt-2">{question.explanation}</p>
