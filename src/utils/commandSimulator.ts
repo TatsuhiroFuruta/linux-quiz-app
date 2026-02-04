@@ -72,12 +72,41 @@ const simulateGrep = (args: string, lines: string[]): string => {
 const simulateSed = (command: string, lines: string[]): string => {
   let result = lines.slice();
 
-  // クォートを除去してsedパターンを抽出
-  // sed 's/.../' または sed "s/..." または sed s/.../
-  const sedPattern = command.match(/sed\s+(?:['"])?(.*?)(?:['"])?$/);
-  if (!sedPattern) return result.join('\n');
+  // sedコマンドからパターンを抽出
+  // シングルクォートまたはダブルクォートで囲まれた部分を取得
+  let pattern = '';
 
-  const pattern = sedPattern[1];
+  // -e オプション付きの場合
+  if (command.includes('-e')) {
+    const eCommands = command.match(/-e\s+['"]([^'"]+)['"]/g);
+    if (eCommands) {
+      eCommands.forEach(eCmd => {
+        const match = eCmd.match(/-e\s+['"]s\/(.+?)\/(.+?)\/(g?)['"]/);
+        if (match) {
+          const [, search, replace, global] = match;
+          // エスケープシーケンスの処理
+          const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
+          result = result.map(line => line.replace(searchRegex, replace));
+        }
+      });
+      return result.join('\n');
+    }
+    return result.join('\n');
+  }
+
+  // 通常のsedコマンド: sed 's/.../' または sed "s/..."
+  const quotedPattern = command.match(/sed\s+(['"])(.+?)\1/);
+  if (quotedPattern) {
+    pattern = quotedPattern[2];
+  } else {
+    // クォートなしの場合（本来はエラーだが、一応処理）
+    const noQuotePattern = command.match(/sed\s+(.+?)(?:\s+\S+)?$/);
+    if (noQuotePattern) {
+      pattern = noQuotePattern[1];
+    } else {
+      return result.join('\n');
+    }
+  }
 
   // 行削除: 2d
   if (pattern.match(/^(\d+)d$/)) {
@@ -108,23 +137,6 @@ const simulateSed = (command: string, lines: string[]): string => {
 
   // 置換: s/search/replace/g
   if (pattern.includes('s/')) {
-    // 複数の-eオプション
-    if (command.includes('-e')) {
-      const eCommands = command.match(/-e\s+['"]([^'"]+)['"]/g);
-      if (eCommands) {
-        eCommands.forEach(eCmd => {
-          const match = eCmd.match(/-e\s+['"]s\/(.+?)\/(.+?)\/(g?)['"]/);
-          if (match) {
-            const [, search, replace, global] = match;
-            const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
-            result = result.map(line => line.replace(searchRegex, replace));
-          }
-        });
-        return result.join('\n');
-      }
-    }
-
-    // 通常の置換
     const match = pattern.match(/s\/(.+?)\/(.+?)\/(g?)/);
     if (match) {
       const [, search, replace, global] = match;
@@ -168,8 +180,8 @@ const simulateAwk = (command: string, lines: string[]): string => {
     }).join('\n');
   }
 
-  if (command.match(/awk\s+'(.+)'/)) {
-    const awkCmd = command.match(/awk\s+'(.+)'/)![1];
+  if (command.match(/awk\s+['"](.+)['"]/)) {
+    const awkCmd = command.match(/awk\s+['"](.+)['"]/)![1];
 
     if (awkCmd.match(/\$2\s*>=\s*(\d+)/)) {
       const threshold = parseInt(awkCmd.match(/\$2\s*>=\s*(\d+)/)![1]);
