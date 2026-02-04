@@ -84,8 +84,12 @@ const simulateSed = (command: string, lines: string[]): string => {
         const match = eCmd.match(/-e\s+['"]s\/(.+?)\/(.+?)\/(g?)['"]/);
         if (match) {
           const [, search, replace, global] = match;
-          // エスケープシーケンスの処理
-          const searchRegex = new RegExp(search.replace(/\\\\/g, '\\'), global ? 'g' : '');
+          // POSIX拡張正規表現 \+ を * に変換してJavaScriptの正規表現に対応
+          const searchPattern = search
+            .replace(/\\\+/g, '+')  // \+ → + (1回以上の繰り返し)
+            .replace(/\\\./g, '\\.');  // \. → \. (ドットのエスケープ維持)
+
+          const searchRegex = new RegExp(searchPattern, global ? 'g' : '');
           result = result.map(line => line.replace(searchRegex, replace));
         }
       });
@@ -140,8 +144,39 @@ const simulateSed = (command: string, lines: string[]): string => {
     const match = pattern.match(/s\/(.+?)\/(.+?)\/(g?)/);
     if (match) {
       const [, search, replace, global] = match;
-      const searchRegex = new RegExp(search, global ? 'g' : '');
-      return result.map(line => line.replace(searchRegex, replace)).join('\n');
+      // POSIX拡張正規表現 \+ を JavaScript の + に変換
+      // \. はドットのエスケープとして維持
+      const searchPattern = search
+        .replace(/\\\+/g, '+')  // \+ → + (1回以上の繰り返し)
+        .replace(/\\\$/g, '\\$')  // \$ → \$ (ドルのエスケープ維持)
+        .replace(/\\\(/g, '(')   // \( → (
+        .replace(/\\\)/g, ')')   // \) → )
+        .replace(/\\\./g, '\\.');  // \. → \.
+
+      const searchRegex = new RegExp(searchPattern, global ? 'g' : '');
+
+      // 置換文字列の処理
+      const replacementPattern = replace
+        .replace(/\\1/g, '$1')  // \1 → $1 (後方参照)
+        .replace(/\\2/g, '$2')  // \2 → $2 (後方参照)
+        .replace(/\\\$/g, '$')  // \$ → $ (ドル記号)
+        .replace(/\\U&/g, () => {
+          // \U& は大文字変換（簡易実装）
+          return '__UPPERCASE__';
+        });
+
+      result = result.map(line => {
+        let newLine = line.replace(searchRegex, replacementPattern);
+
+        // \U& の処理（行頭を大文字に）
+        if (replacementPattern.includes('__UPPERCASE__')) {
+          newLine = line.replace(searchRegex, (matched) => matched.toUpperCase());
+        }
+
+        return newLine;
+      });
+
+      return result.join('\n');
     }
   }
 

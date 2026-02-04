@@ -52,10 +52,15 @@ export const TimeAttackMode: React.FC<TimeAttackModeProps> = ({ level, onGoHome,
 
   const checkAnswer = () => {
     const isCorrect = validateCommand(userAnswer.trim(), currentQ.answer, currentQ.file);
-    const output = simulateCommand(
-      userAnswer.includes('|') ? userAnswer.split('|')[1].trim() : userAnswer,
-      currentQ.data
-    );
+
+    // 正解の場合のみコマンドの出力結果を表示
+    let output = '';
+    if (isCorrect) {
+      output = simulateCommand(
+        userAnswer.includes('|') ? userAnswer.split('|')[1].trim() : userAnswer,
+        currentQ.data
+      );
+    }
 
     setCommandOutput(output);
     setResult(isCorrect);
