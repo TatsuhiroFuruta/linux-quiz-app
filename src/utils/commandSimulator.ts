@@ -127,7 +127,7 @@ const simulateSed = (command: string, lines: string[]): string => {
     return result.join('\n');
   }
 
-  // 行削除: 2d
+  // 行番号指定の削除: 2d
   if (pattern.match(/^(\d+)d$/)) {
     const lineNum = parseInt(pattern.match(/^(\d+)d$/)![1]);
     result.splice(lineNum - 1, 1);
@@ -152,6 +152,41 @@ const simulateSed = (command: string, lines: string[]): string => {
   if (pattern.match(/\/(.+)\/d/)) {
     const deletePattern = pattern.match(/\/(.+)\/d/)![1];
     return result.filter(line => !line.includes(deletePattern)).join('\n');
+  }
+
+  // 行番号指定の置換: 3s/apple/orange/
+  if (pattern.match(/^(\d+)s\//)) {
+    const lineMatch = pattern.match(/^(\d+)(s\/[^/]*\/[^/]*\/?[^/]*)$/);
+    if (lineMatch) {
+      const lineNum = parseInt(lineMatch[1]);
+      const sedCommand = lineMatch[2];
+
+      const replaceMatch = sedCommand.match(/s\/([^/]*)\/([^/]*)\/?([^/]*)/);
+      if (replaceMatch) {
+        const [, search, replace, flags] = replaceMatch;
+        const hasGlobal = flags.includes('g');
+
+        let searchPattern = search;
+        searchPattern = searchPattern.replace(/\\\+/g, '+');
+        searchPattern = searchPattern.replace(/\\\./g, '\\.');
+        searchPattern = searchPattern.replace(/\\\$/g, '\\$');
+        searchPattern = searchPattern.replace(/\\\(/g, '(');
+        searchPattern = searchPattern.replace(/\\\)/g, ')');
+
+        const searchRegex = new RegExp(searchPattern, hasGlobal ? 'g' : '');
+
+        let replacementPattern = replace;
+        replacementPattern = replacementPattern.replace(/\\(\d)/g, '$$$1');
+        replacementPattern = replacementPattern.replace(/\\\$/g, '$');
+
+        // 指定行のみ置換
+        if (lineNum >= 1 && lineNum <= result.length) {
+          result[lineNum - 1] = result[lineNum - 1].replace(searchRegex, replacementPattern);
+        }
+
+        return result.join('\n');
+      }
+    }
   }
 
   // 置換: s/search/replace/g
@@ -179,8 +214,8 @@ const simulateSed = (command: string, lines: string[]): string => {
       searchPattern = searchPattern.replace(/\\\(/g, '(');
       searchPattern = searchPattern.replace(/\\\)/g, ')');
 
-      // スペースとアスタリスク: " *" → " *" (0回以上のスペース)
-      // これはそのままJavaScriptの正規表現として使える
+      // スペース+アスタリスク: " *" はそのまま使う
+      // JavaScriptの正規表現として動作する
 
       // 正規表現オブジェクトを作成
       let searchRegex: RegExp;
@@ -202,7 +237,14 @@ const simulateSed = (command: string, lines: string[]): string => {
 
       // \U& の処理（大文字変換）
       const hasUppercase = replacementPattern.includes('\\U&');
-      if (hasUppercase) {
+
+      // 特別処理: " *" パターンの場合はsplit/joinを使う（Linuxのsedと同じ動作）
+      if (search === ' *' && hasGlobal) {
+        result = result.map(line => {
+          const parts = line.split(/ */);
+          return parts.join(replacementPattern);
+        });
+      } else if (hasUppercase) {
         result = result.map(line => {
           return line.replace(searchRegex, (matched) => matched.toUpperCase());
         });
