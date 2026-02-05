@@ -48,38 +48,29 @@ const hasSpecialCharsRequiringQuotes = (pattern: string): boolean => {
     return true;
   }
 
-  // 以下の特殊文字を含む場合もクォートが必要
-  // (シェルが解釈してしまう文字)
-  const specialChars = [
-    '*',   // グロブ展開
-    '?',   // グロブ展開
-    '[',   // グロブ展開
-    ']',   // グロブ展開
+  // バックスラッシュを含む場合は必ずクォートが必要
+  // 例: \+, \., \$, \(, \) などのエスケープシーケンス
+  if (pattern.includes('\\')) {
+    return true;
+  }
+
+  // 以下の特殊文字はシェルが解釈するためクォート必要
+  const shellSpecialChars = [
     '&',   // バックグラウンド実行
-    '|',   // パイプ（sed内部の|は問題ないが、外側は危険）
     ';',   // コマンド区切り
     '<',   // リダイレクト
     '>',   // リダイレクト
-    '(',   // サブシェル
-    ')',   // サブシェル
     '`',   // コマンド置換
   ];
 
-  // ただし、sedの正規表現で使う文字は除外
-  // s/pattern/replace/ の内部にある特殊文字は問題ない
-  // 例: s/a/b/g はスペースなしなのでクォート不要
-  // 例: s/ //g はスペースありなのでクォート必要
-
-  for (const char of specialChars) {
-    // パイプはsed内部では使えるが、パターンの外にある場合のみチェック
-    if (char === '|' && pattern.startsWith('s/')) {
-      continue; // sed置換パターン内の|は許可
-    }
+  for (const char of shellSpecialChars) {
     if (pattern.includes(char)) {
       return true;
     }
   }
 
+  // 注: $, *, ?, [, ], (, ), ^ はsedの正規表現として使えるのでクォート不要
+  // ただし、バックスラッシュでエスケープされている場合（\(, \$等）はクォート必須（上でチェック済み）
   return false;
 };
 
@@ -109,7 +100,7 @@ const hasSedQuotes = (cmd: string): boolean => {
 
 // コマンドのクォートを正規化（シングル、ダブル、なしを統一）
 const normalizeQuotes = (cmd: string): string => {
-  // sed 's/.../' と sed "s/..." を同一視（クォートを除去）
+  // sed 's/.../' と sed "s/..." と sed s/... を同一視（クォートを除去）
   return cmd
     .replace(/sed\s+'/g, 'sed ')
     .replace(/sed\s+"/g, 'sed ')

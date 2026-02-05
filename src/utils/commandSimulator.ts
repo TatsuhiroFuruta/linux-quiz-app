@@ -73,24 +73,41 @@ const simulateSed = (command: string, lines: string[]): string => {
   let result = lines.slice();
 
   // sedコマンドからパターンを抽出
-  // シングルクォートまたはダブルクォートで囲まれた部分を取得
+  // シングルクォート、ダブルクォート、またはクォートなしのパターンを取得
   let pattern = '';
 
   // -e オプション付きの場合
   if (command.includes('-e')) {
-    const eCommands = command.match(/-e\s+['"]([^'"]+)['"]/g);
+    const eCommands = command.match(/-e\s+(?:['"]([^'"]+)['"]|(\S+))/g);
     if (eCommands) {
       eCommands.forEach(eCmd => {
-        const match = eCmd.match(/-e\s+['"]s\/(.+?)\/(.+?)\/(g?)['"]/);
-        if (match) {
-          const [, search, replace, global] = match;
-          // POSIX拡張正規表現 \+ を * に変換してJavaScriptの正規表現に対応
-          const searchPattern = search
-            .replace(/\\\+/g, '+')  // \+ → + (1回以上の繰り返し)
-            .replace(/\\\./g, '\\.');  // \. → \. (ドットのエスケープ維持)
+        // クォートありとクォートなしの両方に対応
+        const quotedMatch = eCmd.match(/-e\s+['"]([^'"]+)['"]/);
+        const unquotedMatch = eCmd.match(/-e\s+(\S+)/);
 
-          const searchRegex = new RegExp(searchPattern, global ? 'g' : '');
-          result = result.map(line => line.replace(searchRegex, replace));
+        let sedPattern = '';
+        if (quotedMatch) {
+          sedPattern = quotedMatch[1];
+        } else if (unquotedMatch) {
+          sedPattern = unquotedMatch[1];
+        }
+
+        if (sedPattern.startsWith('s/')) {
+          // より柔軟なマッチング: s/search/replace/flags の形式
+          // replaceが空の場合も考慮: s/search//flags
+          const match = sedPattern.match(/s\/([^/]*)\/([^/]*)\/?([^/]*)/);
+          if (match) {
+            const [, search, replace, flags] = match;
+            const hasGlobal = flags.includes('g');
+
+            // POSIX拡張正規表現 \+ を JavaScript の + に変換
+            const searchPattern = search
+              .replace(/\\\+/g, '+')
+              .replace(/\\\./g, '\\.');
+
+            const searchRegex = new RegExp(searchPattern, hasGlobal ? 'g' : '');
+            result = result.map(line => line.replace(searchRegex, replace));
+          }
         }
       });
       return result.join('\n');
@@ -98,18 +115,16 @@ const simulateSed = (command: string, lines: string[]): string => {
     return result.join('\n');
   }
 
-  // 通常のsedコマンド: sed 's/.../' または sed "s/..."
+  // 通常のsedコマンド: sed 's/.../' または sed "s/..." または sed s/.../
   const quotedPattern = command.match(/sed\s+(['"])(.+?)\1/);
+  const unquotedPattern = command.match(/sed\s+(\S+)/);
+
   if (quotedPattern) {
     pattern = quotedPattern[2];
+  } else if (unquotedPattern) {
+    pattern = unquotedPattern[1];
   } else {
-    // クォートなしの場合（本来はエラーだが、一応処理）
-    const noQuotePattern = command.match(/sed\s+(.+?)(?:\s+\S+)?$/);
-    if (noQuotePattern) {
-      pattern = noQuotePattern[1];
-    } else {
-      return result.join('\n');
-    }
+    return result.join('\n');
   }
 
   // 行削除: 2d
@@ -141,40 +156,59 @@ const simulateSed = (command: string, lines: string[]): string => {
 
   // 置換: s/search/replace/g
   if (pattern.includes('s/')) {
-    const match = pattern.match(/s\/(.+?)\/(.+?)\/(g?)/);
+    // より柔軟なマッチング: s/search/replace/flags
+    // replaceが空の場合も考慮: s/search//flags (削除)
+    const match = pattern.match(/s\/([^/]*)\/([^/]*)\/?([^/]*)/);
     if (match) {
-      const [, search, replace, global] = match;
-      // POSIX拡張正規表現 \+ を JavaScript の + に変換
-      // \. はドットのエスケープとして維持
-      const searchPattern = search
-        .replace(/\\\+/g, '+')  // \+ → + (1回以上の繰り返し)
-        .replace(/\\\$/g, '\\$')  // \$ → \$ (ドルのエスケープ維持)
-        .replace(/\\\(/g, '(')   // \( → (
-        .replace(/\\\)/g, ')')   // \) → )
-        .replace(/\\\./g, '\\.');  // \. → \.
+      const [, search, replace, flags] = match;
+      const hasGlobal = flags.includes('g');
 
-      const searchRegex = new RegExp(searchPattern, global ? 'g' : '');
+      // POSIX拡張正規表現とエスケープシーケンスの変換
+      let searchPattern = search;
+
+      // \+ → + (1回以上の繰り返し)
+      searchPattern = searchPattern.replace(/\\\+/g, '+');
+
+      // \. → \. (ドットのエスケープ維持)
+      searchPattern = searchPattern.replace(/\\\./g, '\\.');
+
+      // \$ → \$ (ドルのエスケープ維持)
+      searchPattern = searchPattern.replace(/\\\$/g, '\\$');
+
+      // \( \) → ( ) (グループ化)
+      searchPattern = searchPattern.replace(/\\\(/g, '(');
+      searchPattern = searchPattern.replace(/\\\)/g, ')');
+
+      // スペースとアスタリスク: " *" → " *" (0回以上のスペース)
+      // これはそのままJavaScriptの正規表現として使える
+
+      // 正規表現オブジェクトを作成
+      let searchRegex: RegExp;
+      try {
+        searchRegex = new RegExp(searchPattern, hasGlobal ? 'g' : '');
+      } catch {
+        // 正規表現エラーの場合は元の文字列を返す
+        return result.join('\n');
+      }
 
       // 置換文字列の処理
-      const replacementPattern = replace
-        .replace(/\\1/g, '$1')  // \1 → $1 (後方参照)
-        .replace(/\\2/g, '$2')  // \2 → $2 (後方参照)
-        .replace(/\\\$/g, '$')  // \$ → $ (ドル記号)
-        .replace(/\\U&/g, () => {
-          // \U& は大文字変換（簡易実装）
-          return '__UPPERCASE__';
+      let replacementPattern = replace;
+
+      // \1, \2 → $1, $2 (後方参照)
+      replacementPattern = replacementPattern.replace(/\\(\d)/g, '$$$1');
+
+      // \$ → $ (ドル記号)
+      replacementPattern = replacementPattern.replace(/\\\$/g, '$');
+
+      // \U& の処理（大文字変換）
+      const hasUppercase = replacementPattern.includes('\\U&');
+      if (hasUppercase) {
+        result = result.map(line => {
+          return line.replace(searchRegex, (matched) => matched.toUpperCase());
         });
-
-      result = result.map(line => {
-        let newLine = line.replace(searchRegex, replacementPattern);
-
-        // \U& の処理（行頭を大文字に）
-        if (replacementPattern.includes('__UPPERCASE__')) {
-          newLine = line.replace(searchRegex, (matched) => matched.toUpperCase());
-        }
-
-        return newLine;
-      });
+      } else {
+        result = result.map(line => line.replace(searchRegex, replacementPattern));
+      }
 
       return result.join('\n');
     }
