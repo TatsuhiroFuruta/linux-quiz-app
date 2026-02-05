@@ -74,6 +74,19 @@ const hasSpecialCharsRequiringQuotes = (pattern: string): boolean => {
   return false;
 };
 
+// awkコマンドのクォートをチェックする関数
+const hasAwkQuotes = (cmd: string): boolean => {
+  // awkコマンドが含まれていない場合はチェック不要
+  if (!cmd.includes('awk')) {
+    return true;
+  }
+
+  // awk の後にシングルクォートがあるかチェック（ダブルクォートは不可）
+  // awk '{...}' または awk -F, '{...}' など
+  // ダブルクォートはシェルが$変数を展開してしまうため不可
+  return /awk\s+(?:-[A-Za-z]\S*\s+)?'/.test(cmd);
+};
+
 // sedコマンドのクォートをチェックする関数（必要な場合のみ）
 const hasSedQuotes = (cmd: string): boolean => {
   // sedコマンドが含まれていない場合はチェック不要
@@ -100,10 +113,13 @@ const hasSedQuotes = (cmd: string): boolean => {
 
 // コマンドのクォートを正規化（シングル、ダブル、なしを統一）
 const normalizeQuotes = (cmd: string): string => {
-  // sed 's/.../' と sed "s/..." と sed s/... を同一視（クォートを除去）
+  // sed 's/.../' と sed "s/..." を同一視（クォートを除去）
+  // awk '{...}' のシングルクォートを除去（ダブルクォートは不正解なので除去しない）
   return cmd
     .replace(/sed\s+'/g, 'sed ')
     .replace(/sed\s+"/g, 'sed ')
+    .replace(/awk\s+'/g, 'awk ')
+    .replace(/awk\s+-[A-Za-z]\S*\s+'/g, (match) => match.replace(/'/g, ''))
     .replace(/'/g, '')
     .replace(/"/g, '');
 };
@@ -144,6 +160,13 @@ export const validateCommand = (
       }
     }
 
+    // awkコマンドの場合、クォートが必須
+    if (!hasAwkQuotes(normalizedUser)) {
+      if (normalizedUser.includes('awk')) {
+        continue; // 次の正解候補をチェック
+      }
+    }
+
     // クォートを正規化して比較
     const normalizedUserClean = normalizeQuotes(normalizedUser);
     const normalizedCorrectClean = normalizeQuotes(normalizedCorrect);
@@ -165,6 +188,11 @@ export const validateCommand = (
         continue;
       }
 
+      // awkコマンドの場合、クォートチェック
+      if (!hasAwkQuotes(commandPart) && commandPart.includes('awk')) {
+        continue;
+      }
+
       const commandPartClean = normalizeQuotes(commandPart);
       if (compareCommands(commandPartClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
         return true;
@@ -180,6 +208,11 @@ export const validateCommand = (
 
       // sedコマンドの場合、クォートチェック
       if (!hasSedQuotes(commandPart) && commandPart.includes('sed')) {
+        continue;
+      }
+
+      // awkコマンドの場合、クォートチェック
+      if (!hasAwkQuotes(commandPart) && commandPart.includes('awk')) {
         continue;
       }
 
