@@ -87,6 +87,89 @@ const hasAwkQuotes = (cmd: string): boolean => {
   return /awk\s+(?:-[A-Za-z]\S*\s+)?'/.test(cmd);
 };
 
+// awkコマンド内のスペースを正規化する関数
+const normalizeAwkSpaces = (awkCmd: string): string => {
+  // クォートがある場合とない場合の両方に対応
+  // パターン1: awk '{...}' (クォートあり)
+  let match = awkCmd.match(/awk\s+(?:-[A-Za-z]\S*\s+)?'([^']+)'/);
+
+  // パターン2: awk {...} (クォートなし、normalizeQuotes後)
+  // 複数の{...}ブロック（END など）も考慮して全体を取得
+  if (!match) {
+    match = awkCmd.match(/awk\s+(?:-[A-Za-z]\S*\s+)?(.+)/);
+  }
+
+  if (!match) return awkCmd;
+
+  let normalized = match[1];
+
+  // まず、キーワードの後に必ずスペースを入れる（保護）
+  // awkのキーワード: for, if, while, print, printf, in, など
+  normalized = normalized.replace(/\b(for|if|while|print|printf|return|delete|in)\(/g, '$1 (');
+  normalized = normalized.replace(/\b(for|if|while)\{/g, '$1 {');
+  normalized = normalized.replace(/\b(else)\{/g, '$1 {');
+
+  // printやprintfと$の間にもスペースを入れる（print$1 → print $1）
+  normalized = normalized.replace(/\b(print[f]?)(\$)/g, '$1 $2');
+
+  // 演算子の前後のスペースを統一（削除）
+  // 注意: += や -= などの複合演算子を先に処理
+  normalized = normalized.replace(/\s*\+=\s*/g, '+=');
+  normalized = normalized.replace(/\s*-=\s*/g, '-=');
+  normalized = normalized.replace(/\s*\*=\s*/g, '*=');
+  normalized = normalized.replace(/\s*\/=\s*/g, '/=');
+
+  // 単一演算子
+  normalized = normalized.replace(/\s*\*\s*/g, '*');  // * の前後
+  normalized = normalized.replace(/\s*\+\s*/g, '+');  // + の前後
+  normalized = normalized.replace(/\s*\/\s*/g, '/');  // / の前後
+  normalized = normalized.replace(/\s*=\s*/g, '=');   // = の前後（注: ==は別処理）
+  normalized = normalized.replace(/\s*>=\s*/g, '>='); // >= の前後
+  normalized = normalized.replace(/\s*<=\s*/g, '<='); // <= の前後
+  normalized = normalized.replace(/\s*!=\s*/g, '!='); // != の前後
+  normalized = normalized.replace(/\s*==\s*/g, '=='); // == の前後
+  normalized = normalized.replace(/\s*>\s*/g, '>');   // > の前後
+  normalized = normalized.replace(/\s*<\s*/g, '<');   // < の前後
+
+  // コンマの前後のスペースを削除
+  normalized = normalized.replace(/\s*,\s*/g, ',');
+
+  // 括弧の前後のスペースを削除
+  normalized = normalized.replace(/\s*\(\s*/g, '(');
+  normalized = normalized.replace(/\s*\)\s*/g, ')');
+  normalized = normalized.replace(/\s*\{\s*/g, '{');
+  normalized = normalized.replace(/\s*\}\s*/g, '}');
+
+  // $の後のスペースを削除
+  normalized = normalized.replace(/\$\s+/g, '$');
+
+  // 複数スペースを1つに
+  normalized = normalized.replace(/\s+/g, ' ');
+
+  // 前後の空白を削除
+  normalized = normalized.trim();
+
+  return normalized;
+};
+
+// awkコマンドの掛け算の交換法則を考慮した正規化
+const normalizeAwkMultiplication = (awkNormalized: string): string => {
+  // $1 * 2 と 2 * $1 を同一視
+  // $2 * $3 と $3 * $2 を同一視
+
+  // パターン1: $数字 * 数字 → 数字 * $数字 に統一
+  awkNormalized = awkNormalized.replace(/(\$\d+)\*(\d+)/g, '$2*$1');
+
+  // パターン2: $数字 * $数字 → 小さい方を前に（ソート）
+  awkNormalized = awkNormalized.replace(/(\$\d+)\*(\$\d+)/g, (_match, a, b) => {
+    const numA = parseInt(a.substring(1));
+    const numB = parseInt(b.substring(1));
+    return numA <= numB ? `${a}*${b}` : `${b}*${a}`;
+  });
+
+  return awkNormalized;
+};
+
 // sedコマンドのクォートをチェックする関数（必要な場合のみ）
 const hasSedQuotes = (cmd: string): boolean => {
   // sedコマンドが含まれていない場合はチェック不要
@@ -124,8 +207,25 @@ const normalizeQuotes = (cmd: string): string => {
     .replace(/"/g, '');
 };
 
-// コマンドの比較関数（-iオプション考慮）
+// コマンドの比較関数（-iオプション考慮、awkの柔軟な比較）
 const compareCommands = (cmd1: string, cmd2: string, hasIgnoreCaseOption: boolean): boolean => {
+  // awkコマンドの場合は特別処理
+  if (cmd1.includes('awk') && cmd2.includes('awk')) {
+    // 片方だけに cat コマンドが含まれている場合は不一致
+    // \bcat\s+ で「catの後に必ずスペース」をチェック
+    // これにより catusers.txt などは除外される
+    const cmd1HasCat = /\bcat\s+/.test(cmd1);
+    const cmd2HasCat = /\bcat\s+/.test(cmd2);
+
+    if (cmd1HasCat !== cmd2HasCat) {
+      return false;
+    }
+
+    const normalized1 = normalizeAwkMultiplication(normalizeAwkSpaces(cmd1));
+    const normalized2 = normalizeAwkMultiplication(normalizeAwkSpaces(cmd2));
+    return normalized1 === normalized2;
+  }
+
   if (hasIgnoreCaseOption) {
     const normalize = (cmd: string) => {
       return cmd.replace(/(-i\s+)(\S+)/, (_match, flag, pattern) => {
@@ -172,8 +272,12 @@ export const validateCommand = (
     const normalizedCorrectClean = normalizeQuotes(normalizedCorrect);
 
     // 1. 完全一致（クォート正規化 + -iオプション考慮）
-    if (compareCommands(normalizedUserClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
-      return true;
+    // ただし、ユーザー入力にパイプ記号が含まれている場合は、
+    // パイプ形式として検証するためスキップ
+    if (!normalizedUser.includes('|')) {
+      if (compareCommands(normalizedUserClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
+        return true;
+      }
     }
 
     // 2. パイプ形式 (cat file | command)
