@@ -261,6 +261,34 @@ const simulateSed = (command: string, lines: string[]): string => {
 
 // awk コマンドのシミュレーション
 const simulateAwk = (command: string, lines: string[]): string => {
+  // ========================================
+  // 1. -F, オプションの処理（最優先）
+  // ========================================
+  if (command.includes('-F,')) {
+    const awkMatch = command.match(/awk\s+-F,\s+'(.+)'/);
+    if (awkMatch) {
+      const awkCmd = awkMatch[1];
+
+      // CSV集計
+      if (awkCmd.includes('total[$1]') && awkCmd.includes('for')) {
+        const total: Record<string, number> = {};
+        lines.forEach(line => {
+          const parts = line.split(',');  // カンマで分割
+          const key = parts[0];
+          const value = parseFloat(parts[1]) || 0;
+          total[key] = (total[key] || 0) + value;
+        });
+
+        return Object.entries(total)
+          .map(([n, t]) => `${n} ${t}`)
+          .join('\n');
+      }
+    }
+  }
+
+  // ========================================
+  // 2. 単純なパターン（クォートなし）
+  // ========================================
   if (command.includes('{print $1}')) {
     return lines.map(line => line.split(/\s+/)[0]).join('\n');
   }
@@ -291,9 +319,98 @@ const simulateAwk = (command: string, lines: string[]): string => {
     }).join('\n');
   }
 
-  if (command.match(/awk\s+['"](.+)['"]/)) {
-    const awkCmd = command.match(/awk\s+['"](.+)['"]/)![1];
+  // ========================================
+  // 3. クォート付きパターン（複雑な処理）
+  // ========================================
+  if (command.match(/awk\s+'(.+)'/)) {
+    const awkCmd = command.match(/awk\s+'(.+)'/)![1];
 
+    // -----------------------------------
+    // 3-1. 具体的なパターンから順に
+    // -----------------------------------
+
+    // 7. 複数連想配列（最も具体的）
+    if (awkCmd.includes('sum[$1]') && awkCmd.includes('count[$1]')) {
+      const sum: Record<string, number> = {};
+      const count: Record<string, number> = {};
+
+      lines.forEach(line => {
+        const parts = line.split(/\s+/);
+        const key = parts[0];
+        const value = parseFloat(parts[1]) || 0;
+        sum[key] = (sum[key] || 0) + value;
+        count[key] = (count[key] || 0) + 1;
+      });
+
+      return Object.keys(sum)
+        .map(i => `${i} ${sum[i]} ${count[i]}`)
+        .join('\n');
+    }
+
+    // 6. if-else文（Pass/Failがある場合）
+    if (awkCmd.includes('if') && awkCmd.includes('Pass') && awkCmd.includes('Fail')) {
+      return lines.map(line => {
+        const parts = line.split(/\s+/);
+        const score = parseInt(parts[1]);
+        return `${parts[0]} ${score >= 60 ? 'Pass' : 'Fail'}`;
+      }).join('\n');
+    }
+
+    // 1. BEGIN...END で最大値
+    if (awkCmd.includes('BEGIN') && awkCmd.includes('max') && awkCmd.includes('END')) {
+      let max = 0;
+      lines.forEach(line => {
+        const parts = line.split(/\s+/);
+        const val = parseFloat(parts[0]);
+        if (val > max) max = val;
+      });
+      return max.toString();
+    }
+
+    // 3. パターンマッチと集計
+    if (awkCmd.includes('/ERROR/') && awkCmd.includes('END')) {
+      let sum = 0;
+      lines.forEach(line => {
+        if (line.includes('ERROR')) {
+          const parts = line.split(/\s+/);
+          sum += parseFloat(parts[1]) || 0;
+        }
+      });
+      return sum.toString();
+    }
+
+    // 4. 平均値の計算
+    if (awkCmd.includes('count++') && awkCmd.includes('sum/count')) {
+      let sum = 0;
+      let count = 0;
+      lines.forEach(line => {
+        const parts = line.split(/\s+/);
+        sum += parseFloat(parts[1]) || 0;
+        count++;
+      });
+      return (sum / count).toString();
+    }
+
+    // 2. 連想配列による集計（一般的なパターン）
+    if (awkCmd.includes('sum[$1]') && awkCmd.includes('for') && awkCmd.includes('in sum')) {
+      const sum: Record<string, number> = {};
+      lines.forEach(line => {
+        const parts = line.split(/\s+/);
+        const key = parts[0];
+        const value = parseFloat(parts[1]) || 0;
+        sum[key] = (sum[key] || 0) + value;
+      });
+
+      return Object.entries(sum)
+        .map(([name, total]) => `${name} ${total}`)
+        .join('\n');
+    }
+
+    // -----------------------------------
+    // 3-2. 既存のパターン（一般的）
+    // -----------------------------------
+
+    // $2 >= パターン（if-elseより一般的）
     if (awkCmd.match(/\$2\s*>=\s*(\d+)/)) {
       const threshold = parseInt(awkCmd.match(/\$2\s*>=\s*(\d+)/)![1]);
       return lines.filter(line => {

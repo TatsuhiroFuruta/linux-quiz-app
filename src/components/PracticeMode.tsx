@@ -46,12 +46,12 @@ export const PracticeMode: React.FC<PracticeModeProps> = ({ onGoHome }) => {
     const isCorrect = validateCommand(userAnswer.trim(), currentQ.answer, currentQ.file);
 
     // 正解の場合のみコマンドの出力結果を表示
+    // ユーザー入力ではなく、正解コマンドを使用してシミュレート
     let output = '';
     if (isCorrect) {
-      output = simulateCommand(
-        userAnswer.includes('|') ? userAnswer.split('|')[1].trim() : userAnswer,
-        currentQ.data
-      );
+      // 正解コマンドが配列の場合は最初のものを使用
+      const correctCmd = Array.isArray(currentQ.answer) ? currentQ.answer[0] : currentQ.answer;
+      output = simulateCommand(correctCmd, currentQ.data);
     }
 
     setCommandOutput(output);
