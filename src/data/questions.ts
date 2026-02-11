@@ -277,7 +277,7 @@ export const questions: Questions = {
         task: '連続するスペースを1つのスペースに置換してください',
         answer: 'sed \'s/  */ /g\'',
         hint: '*は0回以上の繰り返し',
-        explanation: 'sed \'s/  */ /g\' で複数スペースを1つに置換',
+        explanation: 'sed \'s/  */ /g\' で複数スペースを1つに置換 ( s/ と * の間の半角スペースの数は2つか3つであることに注意)',
         file: 'spacing.txt'
       },
       {

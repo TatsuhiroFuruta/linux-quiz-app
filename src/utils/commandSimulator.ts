@@ -238,13 +238,8 @@ const simulateSed = (command: string, lines: string[]): string => {
       // \U& の処理（大文字変換）
       const hasUppercase = replacementPattern.includes('\\U&');
 
-      // 特別処理: " *" パターンの場合はsplit/joinを使う（Linuxのsedと同じ動作）
-      if (search === ' *' && hasGlobal) {
-        result = result.map(line => {
-          const parts = line.split(/ */);
-          return parts.join(replacementPattern);
-        });
-      } else if (hasUppercase) {
+      // 置換処理
+      if (hasUppercase) {
         result = result.map(line => {
           return line.replace(searchRegex, (matched) => matched.toUpperCase());
         });

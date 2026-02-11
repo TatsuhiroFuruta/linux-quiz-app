@@ -170,6 +170,22 @@ const normalizeAwkMultiplication = (awkNormalized: string): string => {
   return awkNormalized;
 };
 
+// sedコマンドのスペース+アスタリスクパターンをチェック
+const validateSedSpacePattern = (cmd: string): boolean => {
+  // s/ */ /g のようなパターンを検出
+  const spaceStarPattern = cmd.match(/s\/(\s+)\*\s*\/\s*\/g?/);
+
+  if (spaceStarPattern) {
+    const spaceCount = spaceStarPattern[1].length;
+    // スペース2つまたは3つのみ正解
+    // スペース1つ、または4つ以上は不正解
+    return spaceCount === 2 || spaceCount === 3;
+  }
+
+  // このパターンが含まれていない場合はチェック不要
+  return true;
+};
+
 // sedコマンドのクォートをチェックする関数（必要な場合のみ）
 const hasSedQuotes = (cmd: string): boolean => {
   // sedコマンドが含まれていない場合はチェック不要
@@ -209,6 +225,23 @@ const normalizeQuotes = (cmd: string): string => {
 
 // コマンドの比較関数（-iオプション考慮、awkの柔軟な比較）
 const compareCommands = (cmd1: string, cmd2: string, hasIgnoreCaseOption: boolean): boolean => {
+  // sedコマンドで s/  */ /g と s/   */ /g を同一視
+  if (cmd1.includes('sed') && cmd2.includes('sed')) {
+    // s/ {2,3}\*/ を s/  */ に正規化（スペース2〜3個を2個に統一）
+    const normalizeSedSpaces = (cmd: string) => {
+      return cmd.replace(/s\/ {2,3}\*/g, 's/  *');
+    };
+
+    const sedNorm1 = normalizeSedSpaces(cmd1);
+    const sedNorm2 = normalizeSedSpaces(cmd2);
+
+    // 正規化後に比較
+    if (sedNorm1 === sedNorm2) {
+      return true;
+    }
+    // 正規化しても一致しない場合は、通常の比較に進む
+  }
+
   // awkコマンドの場合は特別処理
   if (cmd1.includes('awk') && cmd2.includes('awk')) {
     // 片方だけに cat コマンドが含まれている場合は不一致
@@ -238,18 +271,52 @@ const compareCommands = (cmd1: string, cmd2: string, hasIgnoreCaseOption: boolea
 };
 
 // ユーザーの入力が正解かチェック
+// クォート内のスペースを保護しながら、コマンド全体のスペースを正規化
+const normalizeSpaces = (cmd: string): string => {
+  // シングルクォートとダブルクォート内のスペースを一時的に保護
+  const quotes: string[] = [];
+  let index = 0;
+
+  // クォート内の文字列を抽出して保護
+  const withPlaceholders = cmd.replace(/(['"])(.+?)\1/g, (match) => {
+    const placeholder = `__QUOTE_${index}__`;
+    quotes[index] = match;
+    index++;
+    return placeholder;
+  });
+
+  // クォート外のスペースのみ正規化
+  const normalized = withPlaceholders.replace(/\s+/g, ' ');
+
+  // クォート内の文字列を復元
+  let result = normalized;
+  quotes.forEach((quote, i) => {
+    result = result.replace(`__QUOTE_${i}__`, quote);
+  });
+
+  return result;
+};
+
 export const validateCommand = (
   userCommand: string,
   correctCommand: string | string[],
   fileName: string
 ): boolean => {
-  const normalizedUser = userCommand.replace(/\s+/g, ' ');
+  // sedのスペース+アスタリスクパターンは正規化前にチェック
+  if (!validateSedSpacePattern(userCommand)) {
+    if (userCommand.includes('sed')) {
+      return false; // スペース数が正しくない場合は不正解
+    }
+  }
+
+  // クォート内のスペースを保護しながら正規化
+  const normalizedUser = normalizeSpaces(userCommand);
 
   // 正解が配列の場合は、いずれかに一致すればOK
   const correctCommands = Array.isArray(correctCommand) ? correctCommand : [correctCommand];
 
   for (const correctCmd of correctCommands) {
-    const normalizedCorrect = correctCmd.replace(/\s+/g, ' ');
+    const normalizedCorrect = normalizeSpaces(correctCmd);
     const hasIgnoreCaseOption = normalizedCorrect.includes('-i') || normalizedUser.includes('-i');
 
     // sedコマンドの場合、必要なクォートがあるかチェック
@@ -292,6 +359,11 @@ export const validateCommand = (
         continue;
       }
 
+      // sedコマンドのスペースパターンチェック
+      if (!validateSedSpacePattern(commandPart) && commandPart.includes('sed')) {
+        continue;
+      }
+
       // awkコマンドの場合、クォートチェック
       if (!hasAwkQuotes(commandPart) && commandPart.includes('awk')) {
         continue;
@@ -312,6 +384,11 @@ export const validateCommand = (
 
       // sedコマンドの場合、クォートチェック
       if (!hasSedQuotes(commandPart) && commandPart.includes('sed')) {
+        continue;
+      }
+
+      // sedコマンドのスペースパターンチェック
+      if (!validateSedSpacePattern(commandPart) && commandPart.includes('sed')) {
         continue;
       }
 
