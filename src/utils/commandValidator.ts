@@ -210,6 +210,46 @@ const hasSedQuotes = (cmd: string): boolean => {
   return /sed\s+['"]/.test(cmd);
 };
 
+// grepコマンドで-Eオプションとパイプ記号を使う場合、クォートが必須
+const hasGrepQuotesForPipe = (cmd: string): boolean => {
+  // grepコマンドが含まれていない場合はチェック不要
+  if (!cmd.includes('grep')) {
+    return true;
+  }
+
+  // -E オプションがない場合はチェック不要
+  if (!cmd.includes('-E')) {
+    return true;
+  }
+
+  // grep -E の後のパターンを抽出
+  // (?:\s|$) ではなく、ファイル名やパイプの直前まで取得するため
+  // 空白なしでパイプ記号が来るケース（login|logout）も考慮して
+  // 行末 or 空白 or パイプ記号 で止める
+  const grepEMatch = cmd.match(/grep\s+-E\s+(\S+)/);
+
+  if (grepEMatch) {
+    const pattern = grepEMatch[1];
+
+    // パイプ記号が含まれている場合
+    if (pattern.includes('|')) {
+      // クォートで囲まれているかチェック
+      const hasQuotes = /^['"][^'"]*\|[^'"]*['"]/.test(pattern);
+      return hasQuotes;
+    }
+  }
+
+  return true;
+};
+
+// クォート外にシェルのパイプがあるかチェック
+const hasShellPipe = (cmd: string): boolean => {
+  // クォート内のパイプを一時的に除去
+  const withoutQuotedPipes = cmd.replace(/['"][^'"]*\|[^'"]*['"]/g, '');
+  // 残ったパイプがあればそれはシェルのパイプ
+  return withoutQuotedPipes.includes('|');
+};
+
 // コマンドのクォートを正規化（シングル、ダブル、なしを統一）
 const normalizeQuotes = (cmd: string): string => {
   // sed 's/.../' と sed "s/..." を同一視（クォートを除去）
@@ -270,7 +310,6 @@ const compareCommands = (cmd1: string, cmd2: string, hasIgnoreCaseOption: boolea
   return cmd1 === cmd2;
 };
 
-// ユーザーの入力が正解かチェック
 // クォート内のスペースを保護しながら、コマンド全体のスペースを正規化
 const normalizeSpaces = (cmd: string): string => {
   // シングルクォートとダブルクォート内のスペースを一時的に保護
@@ -288,10 +327,14 @@ const normalizeSpaces = (cmd: string): string => {
   // クォート外のスペースのみ正規化
   const normalized = withPlaceholders.replace(/\s+/g, ' ');
 
+  // クォート外のパイプの前後スペースを統一（プレースホルダー段階で行うのでクォート内は影響なし）
+  const pipesNormalized = normalized.replace(/\s*\|\s*/g, ' | ');
+
   // クォート内の文字列を復元
-  let result = normalized;
+  // ※ () => quote の形式にすることで、quote内の $ が replace の特殊文字として解釈されるのを防ぐ
+  let result = pipesNormalized;
   quotes.forEach((quote, i) => {
-    result = result.replace(`__QUOTE_${i}__`, quote);
+    result = result.replace(`__QUOTE_${i}__`, () => quote);
   });
 
   return result;
@@ -302,10 +345,29 @@ export const validateCommand = (
   correctCommand: string | string[],
   fileName: string
 ): boolean => {
+  // パイプの後にファイル名がある場合は不正解
+  // 例: grep 'apple' | grep 'banana' combos.txt （これは動作しない）
+  // ※ クォート内のパイプ（正規表現）は除外してチェック
+  const userCommandWithoutQuotedPipes = userCommand.replace(/(['"])([^'"]*)\1/g, (_match, q, content) => {
+    return q + content.replace(/\|/g, '__PIPE__') + q;
+  });
+  const pipeWithTrailingFile = new RegExp(`\\|[^|]*\\s+${fileName}\\s*$`);
+  if (pipeWithTrailingFile.test(userCommandWithoutQuotedPipes)) {
+    return false;
+  }
+
+  // grepコマンドで-Eとパイプを使う場合、クォートが必須
+  // ※ normalizeSpaces前に実行（スペース正規化で | の前にスペースが入るとパターン抽出がずれるため）
+  if (!hasGrepQuotesForPipe(userCommand)) {
+    if (userCommand.includes('grep')) {
+      return false;
+    }
+  }
+
   // sedのスペース+アスタリスクパターンは正規化前にチェック
   if (!validateSedSpacePattern(userCommand)) {
     if (userCommand.includes('sed')) {
-      return false; // スペース数が正しくない場合は不正解
+      return false;
     }
   }
 
@@ -319,18 +381,24 @@ export const validateCommand = (
     const normalizedCorrect = normalizeSpaces(correctCmd);
     const hasIgnoreCaseOption = normalizedCorrect.includes('-i') || normalizedUser.includes('-i');
 
+    // grepコマンドで-Eとパイプを使う場合、クォートが必須
+    if (!hasGrepQuotesForPipe(normalizedUser)) {
+      if (normalizedUser.includes('grep')) {
+        continue;
+      }
+    }
+
     // sedコマンドの場合、必要なクォートがあるかチェック
     if (!hasSedQuotes(normalizedUser)) {
-      // sedコマンドでクォートが必要なのに無い場合は不正解
       if (normalizedUser.includes('sed')) {
-        continue; // 次の正解候補をチェック
+        continue;
       }
     }
 
     // awkコマンドの場合、クォートが必須
     if (!hasAwkQuotes(normalizedUser)) {
       if (normalizedUser.includes('awk')) {
-        continue; // 次の正解候補をチェック
+        continue;
       }
     }
 
@@ -339,9 +407,9 @@ export const validateCommand = (
     const normalizedCorrectClean = normalizeQuotes(normalizedCorrect);
 
     // 1. 完全一致（クォート正規化 + -iオプション考慮）
-    // ただし、ユーザー入力にパイプ記号が含まれている場合は、
+    // ただし、ユーザー入力にシェルのパイプ記号が含まれている場合は、
     // パイプ形式として検証するためスキップ
-    if (!normalizedUser.includes('|')) {
+    if (!hasShellPipe(normalizedUser)) {
       if (compareCommands(normalizedUserClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
         return true;
       }
@@ -354,23 +422,51 @@ export const validateCommand = (
     if (pipeMatch) {
       const commandPart = pipeMatch[1].trim();
 
-      // sedコマンドの場合、クォートチェック
+      if (!hasGrepQuotesForPipe(commandPart) && commandPart.includes('grep')) {
+        continue;
+      }
       if (!hasSedQuotes(commandPart) && commandPart.includes('sed')) {
         continue;
       }
-
-      // sedコマンドのスペースパターンチェック
       if (!validateSedSpacePattern(commandPart) && commandPart.includes('sed')) {
         continue;
       }
-
-      // awkコマンドの場合、クォートチェック
       if (!hasAwkQuotes(commandPart) && commandPart.includes('awk')) {
         continue;
       }
 
       const commandPartClean = normalizeQuotes(commandPart);
       if (compareCommands(commandPartClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
+        return true;
+      }
+    }
+
+    // 2-2. grepパイプ形式 (grep pattern file | grep pattern2)
+    const grepPipePattern = new RegExp(`grep\\s+.+?\\s+${fileName}\\s*\\|\\s*(.+)`);
+    const grepPipeMatch = normalizedUser.match(grepPipePattern);
+
+    if (grepPipeMatch) {
+      const commandPart = grepPipeMatch[1].trim();
+
+      if (!hasGrepQuotesForPipe(commandPart) && commandPart.includes('grep')) {
+        continue;
+      }
+
+      const commandPartClean = normalizeQuotes(commandPart);
+      if (compareCommands(commandPartClean, normalizedCorrectClean, hasIgnoreCaseOption)) {
+        return true;
+      }
+    }
+
+    // 2-3. ファイル名なしのパイプ形式 (grep pattern | grep pattern2)
+    if (!normalizedCorrect.includes(fileName)) {
+      if (!hasGrepQuotesForPipe(normalizedUser) && normalizedUser.includes('grep')) {
+        continue;
+      }
+
+      const userWithoutFile = normalizedUserClean.replace(new RegExp(`\\s+${fileName}`, 'g'), '');
+
+      if (compareCommands(userWithoutFile, normalizedCorrectClean, hasIgnoreCaseOption)) {
         return true;
       }
     }
@@ -382,17 +478,15 @@ export const validateCommand = (
     if (argMatch) {
       const commandPart = argMatch[1].trim();
 
-      // sedコマンドの場合、クォートチェック
+      if (!hasGrepQuotesForPipe(commandPart) && commandPart.includes('grep')) {
+        continue;
+      }
       if (!hasSedQuotes(commandPart) && commandPart.includes('sed')) {
         continue;
       }
-
-      // sedコマンドのスペースパターンチェック
       if (!validateSedSpacePattern(commandPart) && commandPart.includes('sed')) {
         continue;
       }
-
-      // awkコマンドの場合、クォートチェック
       if (!hasAwkQuotes(commandPart) && commandPart.includes('awk')) {
         continue;
       }
