@@ -109,7 +109,7 @@ export const questions: Questions = {
         data: 'apple and banana\nonly apple\nbanana only\napple with cherry',
         task: 'appleとbananaの両方を含む行を抽出してください',
         answer: [
-          'grep \'apple\' | grep \'banana\'',
+          'grep apple | grep banana',
           'grep apple combos.txt | grep banana'
         ],
         hint: 'パイプで2つのgrepを繋げます',
