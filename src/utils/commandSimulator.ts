@@ -1,25 +1,28 @@
 // grep コマンドのシミュレーション
 const simulateGrep = (args: string, lines: string[]): string => {
-  // クォートを除去
-  const cleanArgs = args.replace(/^['"]|['"]$/g, '');
+  const cleanArgs = args.replace(/^['"]|['"]$/g, '').trim();
+
+  if (cleanArgs === '.') {
+    return lines.filter(line => line.length > 0).join('\n');
+  }
 
   if (cleanArgs.startsWith('-v ')) {
-    const pattern = cleanArgs.substring(3).trim();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim();
     return lines.filter(line => !line.includes(pattern)).join('\n');
   }
 
   if (cleanArgs.startsWith('-i ')) {
-    const pattern = cleanArgs.substring(3).trim().toLowerCase();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim().toLowerCase();
     return lines.filter(line => line.toLowerCase().includes(pattern)).join('\n');
   }
 
   if (cleanArgs.startsWith('-c ')) {
-    const pattern = cleanArgs.substring(3).trim();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim();
     return lines.filter(line => line.includes(pattern)).length.toString();
   }
 
   if (cleanArgs.startsWith('-n ')) {
-    const pattern = cleanArgs.substring(3).trim();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim();
     return lines
       .map((line, idx) => (line.includes(pattern) ? `${idx + 1}:${line}` : null))
       .filter(Boolean)
@@ -27,13 +30,13 @@ const simulateGrep = (args: string, lines: string[]): string => {
   }
 
   if (cleanArgs.startsWith('-w ')) {
-    const pattern = cleanArgs.substring(3).trim();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim();
     const regex = new RegExp(`\\b${pattern}\\b`);
     return lines.filter(line => regex.test(line)).join('\n');
   }
 
   if (cleanArgs.startsWith('-E ')) {
-    const pattern = cleanArgs.substring(3).replace(/"/g, '').trim();
+    const pattern = cleanArgs.substring(3).replace(/^['"]|['"]$/g, '').trim();
     const regex = new RegExp(pattern);
     return lines.filter(line => regex.test(line)).join('\n');
   }
@@ -55,17 +58,16 @@ const simulateGrep = (args: string, lines: string[]): string => {
     }
   }
 
-  if (cleanArgs.startsWith('^')) {
-    const pattern = cleanArgs.substring(1);
-    return lines.filter(line => line.startsWith(pattern)).join('\n');
+  if (cleanArgs.startsWith('^') || cleanArgs.includes('$') || cleanArgs.includes('\\.') || cleanArgs.includes('.*')) {
+    try {
+      const regex = new RegExp(cleanArgs);
+      return lines.filter(line => regex.test(line)).join('\n');
+    } catch {
+      return lines.filter(line => line.includes(cleanArgs)).join('\n');
+    }
   }
 
-  if (cleanArgs.includes('$')) {
-    const pattern = cleanArgs.replace(/\\\./g, '.').replace('$', '');
-    return lines.filter(line => line.endsWith(pattern)).join('\n');
-  }
-
-  return lines.filter(line => line.includes(cleanArgs.trim())).join('\n');
+  return lines.filter(line => line.includes(cleanArgs)).join('\n');
 };
 
 // sed コマンドのシミュレーション
@@ -447,9 +449,55 @@ export const simulateCommand = (command: string, data: string): string => {
 
   try {
     if (command.includes('grep')) {
-      const grepMatch = command.match(/grep\s+(.+)/);
-      if (!grepMatch) return '';
-      return simulateGrep(grepMatch[1].trim(), lines);
+      // クォート外のパイプのみで分割する（クォート内の | は正規表現のOR演算子なので分割しない）
+      const splitByShellPipe = (cmd: string): string[] => {
+        const segments: string[] = [];
+        let current = '';
+        let inQuote: string | null = null;
+        for (const ch of cmd) {
+          if (inQuote) {
+            current += ch;
+            if (ch === inQuote) inQuote = null;
+          } else if (ch === "'" || ch === '"') {
+            inQuote = ch;
+            current += ch;
+          } else if (ch === '|') {
+            segments.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+        if (current.trim()) segments.push(current.trim());
+        return segments;
+      };
+
+      // 各セグメントからgrep引数（末尾のファイル名を除いたパターン部分）を抽出
+      const extractGrepArgs = (segment: string): string | null => {
+        segment = segment.trim();
+        if (segment.startsWith('cat ')) return null;
+        if (!segment.startsWith('grep')) return null;
+        const argsMatch = segment.match(/^grep\s+(.*)/);
+        if (!argsMatch) return null;
+        let args = argsMatch[1].trim();
+        args = args.replace(/\s+\S+\.\w+$/, '').trim();
+        return args;
+      };
+
+      const pipeSegments = splitByShellPipe(command);
+      let filteredLines = lines;
+      let hasGrepSegment = false;
+
+      for (const segment of pipeSegments) {
+        const args = extractGrepArgs(segment);
+        if (args === null) continue;
+        hasGrepSegment = true;
+        const result = simulateGrep(args, filteredLines);
+        filteredLines = result === '' ? [] : result.split('\n');
+      }
+
+      if (hasGrepSegment) return filteredLines.join('\n');
+      return '';
     }
 
     if (command.includes('sed')) {
