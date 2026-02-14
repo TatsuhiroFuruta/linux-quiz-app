@@ -75,6 +75,24 @@ const hasSpecialCharsRequiringQuotes = (pattern: string): boolean => {
 };
 
 // awkコマンドのクォートをチェックする関数
+// クォートが正しく対称になっているかチェック
+// 片方だけ、または開閉が異なる種類（' と "の混在）は不正
+const hasBalancedQuotes = (cmd: string): boolean => {
+  let inSingle = false;
+  let inDouble = false;
+
+  for (const ch of cmd) {
+    if (ch === "'" && !inDouble) {
+      inSingle = !inSingle;
+    } else if (ch === '"' && !inSingle) {
+      inDouble = !inDouble;
+    }
+  }
+
+  // 全て閉じられていれば true
+  return !inSingle && !inDouble;
+};
+
 const hasAwkQuotes = (cmd: string): boolean => {
   // awkコマンドが含まれていない場合はチェック不要
   if (!cmd.includes('awk')) {
@@ -84,7 +102,12 @@ const hasAwkQuotes = (cmd: string): boolean => {
   // awk の後にシングルクォートがあるかチェック（ダブルクォートは不可）
   // awk '{...}' または awk -F, '{...}' など
   // ダブルクォートはシェルが$変数を展開してしまうため不可
-  return /awk\s+(?:-[A-Za-z]\S*\s+)?'/.test(cmd);
+  if (!/awk\s+(?:-[A-Za-z]\S*\s+)?'/.test(cmd)) {
+    return false;
+  }
+
+  // クォートが正しく閉じられているか（対応するシングルクォートが2つあるか）チェック
+  return hasBalancedQuotes(cmd);
 };
 
 // awkコマンド内のスペースを正規化する関数
@@ -195,6 +218,10 @@ const hasSedQuotes = (cmd: string): boolean => {
 
   // クォートなしでも動作可能なコマンドかチェック
   if (canSedWorkWithoutQuotes(cmd)) {
+    // クォートなしOKでも、クォートが存在する場合は対称性を確認
+    if (cmd.includes("'") || cmd.includes('"')) {
+      return hasBalancedQuotes(cmd);
+    }
     return true;
   }
 
@@ -203,11 +230,13 @@ const hasSedQuotes = (cmd: string): boolean => {
   if (cmd.includes(' -e ')) {
     const ePatterns = cmd.match(/-e\s+['"]/g);
     const eCount = (cmd.match(/-e\s+/g) || []).length;
-    return ePatterns !== null && ePatterns.length === eCount;
+    if (ePatterns === null || ePatterns.length !== eCount) return false;
+    return hasBalancedQuotes(cmd);
   }
 
   // 通常のsedコマンド: sed 's/.../' または sed "s/..."
-  return /sed\s+['"]/.test(cmd);
+  if (!/sed\s+['"]/.test(cmd)) return false;
+  return hasBalancedQuotes(cmd);
 };
 
 // grepコマンドで-Eオプションとパイプ記号を使う場合、クォートが必須
@@ -360,6 +389,13 @@ export const validateCommand = (
   // ※ normalizeSpaces前に実行（スペース正規化で | の前にスペースが入るとパターン抽出がずれるため）
   if (!hasGrepQuotesForPipe(userCommand)) {
     if (userCommand.includes('grep')) {
+      return false;
+    }
+  }
+
+  // クォートが存在する場合は対称性チェック（片方だけ・開閉不一致は不正解）
+  if (userCommand.includes("'") || userCommand.includes('"')) {
+    if (!hasBalancedQuotes(userCommand)) {
       return false;
     }
   }
