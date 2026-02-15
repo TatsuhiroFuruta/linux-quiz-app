@@ -3,7 +3,7 @@ export interface Question {
   title: string;
   data: string;
   task: string;
-  answer: string;
+  answer: string | string[];  // 単一の正解または複数の正解
   hint: string;
   explanation: string;
   file: string;
